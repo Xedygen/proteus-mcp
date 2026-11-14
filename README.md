@@ -7,22 +7,25 @@ The acceptance target is the YTU BLM3061 (Mikroişlemci Sistemleri ve Assembly D
 `tanım.pdf` and its `taslak.pdsprj`, Claude should be able to produce a working `.pdsprj` and show that it meets
 the "İstenenler" list.
 
-Status: **planning. No server code exists yet.** This file and [TODO.md](TODO.md) are the plan to review first.
-The original brief is in [readme.txt](readme.txt).
+Status: **in progress.** [TODO.md](TODO.md) is the work order, [docs/FORMAT.md](docs/FORMAT.md) the file
+format notes.
 
 ## What is in this folder
 
 | Path | Contents |
 | --- | --- |
-| `readme.txt` | Original brief |
 | `README.md` | This file |
-| `TODO.md` | Phased work list, open decisions, things needed from the owner |
-| `labs/2024/`, `labs/2025/` | Lab material pulled from the YTU archive repo (124 files, about 50 MB) |
+| `TODO.md` | Work order by milestone, and things needed from the owner |
+| `docs/FORMAT.md` | What is known about the Proteus 8.6 project file format |
+| `src/proteus_mcp/` | The server package |
+| `scripts/` | Lab download, sample extraction, format exploration |
+| `tools/masm/` | MASM 5.10 toolchain for 8086 firmware |
+| `labs/2024/`, `labs/2025/` | Lab material pulled from the YTU archive repo (not in git) |
 
 `labs/` is a copy of
 [`lablar/`](https://github.com/baselkelziye/YTU_Bilgisayar_Muhendisligi_Arsiv/tree/main/3-1/Mikroi%C5%9Flemci%20Sistemleri%20ve%20Assembly%20Dili/lablar)
 from the archive. It holds the assignment PDFs, the instructor templates (`taslak.pdsprj`, `proteus_sablon.pdsprj`)
-and past student solutions. About 43 MB of it is two student videos under `labs/2024` that can be deleted.
+and past student solutions. Re-create it with `python -X utf8 scripts/pull_labs.py labs get`.
 
 ## The target labs
 
