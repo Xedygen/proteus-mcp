@@ -34,19 +34,19 @@ about the file format), this file.
 
 ## Milestone 0: environment (small)
 
-- [ ] `pyproject.toml` with a `src/proteus_mcp` package, `uv` venv in `.venv`, dependencies: `mcp`, plus
+- [x] `pyproject.toml` with a `src/proteus_mcp` package, `uv` venv in `.venv`, dependencies: `mcp`, plus
       whatever is needed for Windows automation and screenshots (`pywinauto` or `pywin32`, `pillow`).
-- [ ] `python -m proteus_mcp doctor` prints: Proteus path and build, MASM and DOSBox found, Python version.
-- [ ] Extract the samples for analysis: `python -X utf8 scripts/extract_labs.py labs work/x`.
+- [x] `python -m proteus_mcp doctor` prints: Proteus path and build, MASM and DOSBox found, Python version.
+- [x] Extract the samples for analysis: `python -X utf8 scripts/extract_labs.py labs work/x`.
 
 ## Milestone 1: firmware build (independent of everything else)
 
-- [ ] `firmware.py`: assemble and link an `.asm` with MASM 5.10 inside DOSBox, headless. Copy the source to a
+- [x] `firmware.py`: assemble and link an `.asm` with MASM 5.10 inside DOSBox, headless. Copy the source to a
       temp folder under an 8.3 name, write a DOSBox conf (mount, `MASM X.ASM,X.OBJ,X.LST,NUL; > MASM.LOG`,
       `LINK X.OBJ,X.EXE,NUL,,NUL; > LINK.LOG`, `exit`), run with `-noconsole` and `SDL_VIDEODRIVER=dummy`
       so no window appears, with a timeout. Return success, the EXE bytes, and parsed errors (file, line,
       message).
-- [ ] Test: build every solution `main.asm` under `work/x/*/FIRMWARE/*/main.asm`. Record which fail and why.
+- [x] Test: build every solution `main.asm` under `work/x/*/FIRMWARE/*/main.asm`. Record which fail and why.
       The sources were written for MASM32 `ml.exe` (MASM 6); note syntax that MASM 5.10 rejects in
       `docs/QUIRKS.md` so Claude knows what to avoid.
 - [ ] Find out what EXE the 8086 model accepts. Compare a MASM 5.10 EXE with the shipped `Debug.exe` (which
