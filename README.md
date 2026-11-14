@@ -1,0 +1,147 @@
+# proteus-mcp
+
+An MCP server that lets Claude (Opus 5.5) work inside **Proteus 8.6**: draw schematics around ICs such as the
+8086, attach firmware, run the simulation and check the result.
+
+The acceptance target is the YTU BLM3061 (Mikroişlemci Sistemleri ve Assembly Dili) lab set: given a lab's
+`tanım.pdf` and its `taslak.pdsprj`, Claude should be able to produce a working `.pdsprj` and show that it meets
+the "İstenenler" list.
+
+Status: **planning. No server code exists yet.** This file and [TODO.md](TODO.md) are the plan to review first.
+The original brief is in [readme.txt](readme.txt).
+
+## What is in this folder
+
+| Path | Contents |
+| --- | --- |
+| `readme.txt` | Original brief |
+| `README.md` | This file |
+| `TODO.md` | Phased work list, open decisions, things needed from the owner |
+| `labs/2024/`, `labs/2025/` | Lab material pulled from the YTU archive repo (124 files, about 50 MB) |
+
+`labs/` is a copy of
+[`lablar/`](https://github.com/baselkelziye/YTU_Bilgisayar_Muhendisligi_Arsiv/tree/main/3-1/Mikroi%C5%9Flemci%20Sistemleri%20ve%20Assembly%20Dili/lablar)
+from the archive. It holds the assignment PDFs, the instructor templates (`taslak.pdsprj`, `proteus_sablon.pdsprj`)
+and past student solutions. About 43 MB of it is two student videos under `labs/2024` that can be deleted.
+
+## The target labs
+
+Proteus-based assignments (these are what the MCP must handle):
+
+| Lab | Topic | Parts | What "working" looks like |
+| --- | --- | --- | --- |
+| 2025 lab5 | 8255 + 7-segment | 8086, 74HC373, 8255A, common-anode 7-seg, 8 buttons, resistors | Pressing button N shows digit N |
+| 2025 lab6 | 8251 USART | 8086, 3x 74273, 74154, 8251A, 2 virtual terminals, gates | Type `A B C 0` in terminal 1, terminal 2 prints `DEF`; 8251 decoded at I/O 0158H |
+| 2025 lab7 | DAC0830 / ADC0804 | 8086, latches, 74154, DAC0830, op-amp, scope (plus ADC, LDR, motors for part 2) | 100 Hz, 32-step sine on the scope; or motor speed follows the LDR |
+| 2025 lab8 | 8259 + ADC0804 + 8251 | 8086, 3x 74273, 74154, 8251A, 8259, ADC0804, pot, virtual terminal | Five ADC samples printed as hex bytes, interrupt driven (vectors 51H, 52H) |
+| 2025 odev2 | Memory map and address decoding | 8086, 3x 74273, 2x 74LS138, 4x 27C128, 2x 62256 | ROM at 20000H, RAM at 60000H, RAM00/RAM01 show the bytes written by the ROM routines |
+| 2024 lab 5 to 8 | Same family of topics | Templates and solutions included | Useful as extra test cases |
+
+Labs 1 to 4 and odev1 (both years) ship only `.asm` / `.cpp` files and no Proteus project. They are plain
+assembly exercises. Whether the MCP should cover them is an open decision in [TODO.md](TODO.md).
+
+Two things stand out across all of them:
+
+1. Every Proteus lab starts from a template where the parts are already placed. The work is **wiring, net labels,
+   address decoding logic, part properties and the assembly program**. Drawing from a blank sheet is rarely needed.
+2. The result is checked by **looking**: a 7-segment digit, virtual terminal text, a scope trace, a memory window.
+   The MCP needs a way to read those back, not only to start the simulation.
+
+## What this machine has
+
+| Item | Finding |
+| --- | --- |
+| Proteus | 8.6 SP2, build 8.6.23525, at `C:\Program Files (x86)\Labcenter Electronics\Proteus 8 Professional` |
+| 8086 model | Present (`MODELS\i8086.DLL`), plus the `VSM for 8086` demo board sample |
+| Device libraries | 162 `.LIB` files in `LIBRARY\` |
+| 8086 assembler | **MASM 5.10** (`MASM.EXE`, `LINK.EXE`, `debug.exe`) in `D:\Projects\2627G_BLM3061_MSAD\lab2` and `lab3` (same set in `C:\masm`). These are 16-bit DOS programs, so they run through DOSBox |
+| DOSBox | 0.74-3 at `C:\Program Files (x86)\DOSBox-0.74-3` |
+| Proteus's own Build button | Will not work: it expects MASM32 (`ml.exe` + `link16.exe`) in `C:\masm32` or `%PROGRAMFILES%\8086 Compilers Bundle`, and neither exists. The MCP builds outside Proteus instead |
+| Python / uv / Node | Python 3.10.11, `uv`, Node are installed |
+
+## How a Proteus 8.6 project is stored
+
+A `.pdsprj` is a ZIP archive. Lab 5's template contains:
+
+| Entry | Format | Role |
+| --- | --- | --- |
+| `PROJECT.XML` | XML | Version stamp (`RELEASE="806" FILEVER="814"`) |
+| `ROOT.DSN` | Binary (`ISIS SCHEMATIC FILE`) | The drawing: parts, wires, labels, positions |
+| `ROOT.CDB` | Binary with plain-text properties | Parts database: pins, nets, properties such as `{PROGRAM=...}`, `{CLOCK=1MHz}`, `{LOAD_SEG=0x0000}` |
+| `FIRMWARE.XML`, `FIRMWARE/8086.XML` | XML | VSM Studio firmware project (compiler MASM32) |
+| `FIRMWARE/8086/main.asm` | Text | The assembly source |
+| `FIRMWARE/8086/Debug/Debug.exe` | DOS EXE | The built firmware the 8086 model loads |
+
+So the firmware half is easy to edit from outside Proteus (text and XML in a ZIP). The schematic half is a binary
+format with no public specification, and `ROOT.DSN` and `ROOT.CDB` must stay consistent with each other.
+
+Proteus 8.6 has no official automation API.
+
+## Existing Proteus MCPs on GitHub
+
+| Repo | How it works | Usable for 8.6? |
+| --- | --- | --- |
+| [chen0416ccc-cpu/Proteus-MCP](https://github.com/chen0416ccc-cpu/Proteus-MCP) | Python. Semantic circuit model, writes `.pdsprj` files directly, and injects into the running process with Frida for live edits and simulation | **Not as is.** File writing accepts only Proteus 9 containers (`FILEVER` 900 to 907). The in-process bridge is pinned to one build, 9.0.40482, by module hash and refuses anything else. Firmware support is Keil C51 only, no 8086. Needs Python 3.11+ |
+| [jackmaikr4-sketch/keil-proteus-automation-skill-mcp](https://github.com/jackmaikr4-sketch/keil-proteus-automation-skill-mcp) | TypeScript + PowerShell. Drives the Proteus window through Windows UI Automation: finds menu commands by name, reads enabled state to tell running / paused / stopped, sets part properties through the Edit Component dialog, takes screenshots | **Approach carries over.** It does not depend on the Proteus build. It cannot draw schematics |
+| [3023073486/agent-Proteus](https://github.com/3023073486/agent-Proteus) | Thin wrapper that forwards to other desktop automation backends | Little to reuse |
+
+Conclusion: nothing can be dropped in for 8.6. The plan is to build our own server and borrow designs:
+
+- from chen's project: the semantic model, the `.LIB` library reader, the "write, then read back and verify"
+  discipline, and its documentation of the DSN/CDB layout as a starting point for decoding the 8.x format;
+- from the keil project: menu-driven simulation control and dialog handling.
+
+Both declare an MIT licence. Confirm that before copying any code, and keep attribution if code is reused.
+
+## Proposed design
+
+Python MCP server over stdio (official `mcp` SDK, managed with `uv`), Windows only.
+
+Three layers:
+
+1. **Project file layer (offline, no GUI).** Open a `.pdsprj` as a ZIP. Read parts, pins, nets and properties.
+   Replace `main.asm` and the built firmware. Edit part properties. Always work on a copy, never the template.
+2. **Schematic editing layer.** Add wires, net labels, terminals and parts. This is the hard part and has two
+   candidate routes, to be settled by a spike (TODO phase 1):
+   - *Route A, write `ROOT.DSN` / `ROOT.CDB` directly.* Fast, repeatable, no screen needed. Requires decoding the
+     8.6 binary format. The 22 sample projects in `labs/` (template and solution pairs) are the decoding corpus.
+   - *Route B, drive the ISIS window.* Keyboard and mouse automation against the real editor. No format work,
+     but slower, sensitive to window state, and it takes over the desktop while it runs.
+   Net labels and terminals are preferred over long drawn wires either way, since they make connections by name.
+3. **Simulation and observation layer (GUI).** Start, pause, stop through menu commands. Press buttons and type
+   into virtual terminals. Read back results with screenshots (Claude reads images), the simulation log, and where
+   possible text from popup windows (virtual terminal, memory contents).
+
+Firmware build: assemble the 8086 source outside Proteus with the course's MASM 5.10, run inside DOSBox without
+a visible prompt (mount a build folder, run `masm` and `link` with output redirected to a log, exit), then place
+the resulting DOS EXE where the project expects it. The 8086 model loads DOS EXE files, which is also what the
+lab templates ship. One thing to watch: the templates were written for MASM32's `ml.exe` (MASM 6), so a source
+file may occasionally use syntax MASM 5.10 rejects. The firmware spike in TODO checks this on real lab code.
+
+The same DOSBox + `debug.exe` pair can run and inspect the plain assembly labs (lab 1 to 4) if those are in scope.
+
+### Planned tools (first draft)
+
+| Group | Tools |
+| --- | --- |
+| Environment | `proteus_doctor` (install, version, assembler, running instances) |
+| Library | `library_search`, `device_info` (pins, default properties) |
+| Project | `project_open`, `project_copy`, `project_summary`, `netlist_read`, `project_save_as` |
+| Schematic | `component_add`, `component_set_property`, `wire_connect`, `label_add`, `terminal_add`, `component_delete`, `schematic_screenshot` |
+| Firmware | `firmware_set_source`, `firmware_build`, `firmware_attach` |
+| Simulation | `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` |
+| Interaction | `button_press`, `terminal_type`, `pot_set` |
+| Observation | `screenshot`, `terminal_read`, `memory_read`, `probe_read` |
+| Verification | `net_check` (is pin X on net Y), `erc_run` |
+
+## Known risks
+
+- **The schematic format is undocumented.** If Route A proves too costly, the project falls back to Route B and
+  becomes slower and less reliable.
+- **Reading results depends on the screen.** Scope traces and 7-segment displays can only be checked from
+  screenshots. Virtual terminal and memory windows may or may not expose their text.
+- **GUI automation needs the desktop.** While a simulation run is being driven, the mouse and keyboard are in use.
+- **Simulation is not real time.** The 8086 model runs slower than wall clock, so timing checks (100 Hz sine,
+  9600 baud) need simulated time, not elapsed time.
+- **Model quirks.** The lab sheets already mention one: after `IN AL, DATA_PORT` on the 8251, run `SHR AL, 1`.
+  Notes like this need to live somewhere Claude will see them.

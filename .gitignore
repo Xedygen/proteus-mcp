@@ -1,0 +1,6 @@
+labs/
+work/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
