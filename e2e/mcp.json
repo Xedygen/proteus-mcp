@@ -1,0 +1,1 @@
+{"mcpServers": {"proteus": {"command": "D:/Projects/proteus-mcp/.venv/Scripts/python.exe", "args": ["-X", "utf8", "-m", "proteus_mcp", "serve"], "env": {"PROTEUS_MCP_BACKGROUND": "0"}}}}

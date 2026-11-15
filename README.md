@@ -26,6 +26,18 @@ Working and tested through a real MCP client (`scripts/smoke_mcp.py`), on this m
 Proteus was reinstalled on 2026-11-15; simulation of the 8086 labs now works (the earlier install could not
 drive 8086 I/O, see `docs/QUIRKS.md`).
 
+**Fresh-session test (the real acceptance check):** a new Claude Opus 5.5 session, run headless with only
+these tools and the Read tool and given just the lab's PDF path, completed lab5 (all 8 keys show their digit)
+and lab8 (interrupt-driven ADC samples printed in hex, changing with the pot) on its own, including exporting
+the project and reporting how each requirement was checked. Prompts: `e2e/prompt_*.txt`. The tool problems
+those sessions reported are fixed. Run one yourself:
+
+```powershell
+cd e2e
+claude -p (Get-Content prompt_lab5.txt -Raw) --model claude-opus-5-5 --mcp-config mcp.json --strict-mcp-config `
+  --allowedTools "mcp__proteus__*" "Read" --disallowedTools advisor
+```
+
 **Worked example:** `scripts/lab5_example.py` completes the 2025 lab5 template (8255 + 7-segment) entirely
 through the MCP tools: address wiring, eight added series resistors, port A to the display, port B to the
 buttons with pull-ups, a MASM 5.10 program, then 21 connectivity checks against Proteus's own netlist, all

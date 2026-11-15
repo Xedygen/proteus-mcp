@@ -1,0 +1,9 @@
+You have a Proteus 8.6 MCP server ("proteus" tools). Do this university lab assignment end to end.
+
+The assignment PDF is D:\Projects\proteus-mcp\labs\2025\lab5\tanım.pdf (read it with the Read tool).
+Find the lab's template with lab_list, read quirks() before writing any 8086 code, complete the circuit the PDF
+asks for, write and build the 8086 program, simulate it, and check every item of the "İstenenler" list with
+evidence from the simulation (netlist checks, screenshots, logs). Do not call the advisor tool. You may use the mouse (call
+proteus_background(false)). Do not modify anything under labs/. When done, export the finished project to
+D:\Projects\proteus-mcp\work\e2e\lab5_result.pdsprj and finish with a short report: what you built, how each
+requirement was verified, and any tool problems you hit (be specific: which tool, what input, what went wrong).
