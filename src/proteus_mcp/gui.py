@@ -247,6 +247,20 @@ class Session:
         win32gui.ShowWindow(self.main, 4)                                   # SW_SHOWNOACTIVATE (un-minimise)
         win32gui.SetWindowPos(self.main, 0, right + 50, t, 0, 0, flags)
 
+    def hide_popups(self) -> None:
+        """Background mode: move Proteus's own popup windows (oscilloscope, virtual terminals ...) that are
+        on a monitor off-screen as well.  Dialogs are left alone (they are answered, not looked at)."""
+        if not BACKGROUND["on"]:
+            return
+        right = user32.GetSystemMetrics(76) + user32.GetSystemMetrics(78)
+        flags = win32con.SWP_NOACTIVATE | win32con.SWP_NOZORDER | win32con.SWP_NOSIZE
+        for h in _windows(self.pid):
+            if h == self.main or win32gui.GetClassName(h) == "#32770":
+                continue
+            l, t, r, b = win32gui.GetWindowRect(h)
+            if l < right:
+                win32gui.SetWindowPos(h, 0, right + 60 + (l % 400), t, 0, 0, flags)
+
     def show_schematic(self, timeout: float = 5.0) -> None:
         """Bring the Schematic Capture tab to the front.  Proteus restores the last tab per project and
         switches to Source Code when a simulation pauses; that tab has no Tool menu."""
@@ -374,8 +388,13 @@ class Session:
                    "stop": r"^Stop VSM Debugging"}[action]
         self.handle_dialogs()
         self.command(pattern)
-        time.sleep(settle)
+        # popups appear shortly after the start; move them off-screen early and again after settling
+        for _ in range(4):
+            time.sleep(min(settle, 1.0) / 4)
+            self.hide_popups()
+        time.sleep(max(settle - min(settle, 1.0), 0))
         self.handle_dialogs()
+        self.hide_popups()
         return self.sim_state()
 
     def find_child(self, title: str, cls: str | None = None) -> int | None:
@@ -470,6 +489,7 @@ class Session:
             raise GuiError(f"no Debug menu item matching {name!r}; available: {avail}")
         win32gui.PostMessage(self.main, win32con.WM_COMMAND, hits[0].command, 0)
         time.sleep(1.0)
+        self.hide_popups()
         title = re.sub(r"^&?\d+\.\s*|&", "", hits[0].path.split("/")[-1])
         for c, _, t in _children(self.main):
             if t.replace("&", "") == title:
@@ -527,7 +547,7 @@ class Session:
         if action in ("click", "up"):
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
-    def sheet_frame(self) -> tuple[int, int, int, int]:
+    def sheet_frame(self, size: tuple[int, int] | None = None) -> tuple[int, int, int, int]:
         """Zoom to the entire sheet and return the sheet border's screen rectangle (left, top, right, bottom).
 
         The border is the outermost blue (0,0,255-ish) line in the editing window."""
@@ -541,13 +561,19 @@ class Session:
         crop = img.crop((l - ml, t - mt, r - ml, b - mt)).convert("RGB")
         px = crop.load()
         w, h = crop.size
-        blue = lambda x, y: (lambda c: c[2] > 180 and c[0] < 90 and c[1] < 90)(px[x, y])
+        # the plain sheet border is blue; templates with a drawn frame (e.g. lab7) use black
+        blue = lambda x, y: (lambda c: (c[2] > 180 and c[0] < 90 and c[1] < 90) or max(c) < 45)(px[x, y])
         # the border is the only blue line spanning a large part of the view; bus wires and icons are short
         cols = [x for x in range(w) if sum(blue(x, y) for y in range(0, h, 2)) > h * 0.15]
         rows = [y for y in range(h) if sum(blue(x, y) for x in range(0, w, 2)) > w * 0.15]
         if not cols or not rows:
             raise GuiError("sheet border not found on screen")
-        return l + min(cols), t + min(rows), l + max(cols), t + max(rows)
+        left, top, right, bottom = l + min(cols), t + min(rows), l + max(cols), t + max(rows)
+        if size:
+            # the scanned window also covers the side panels, so the left edge is the least reliable one;
+            # derive it from the other three and the sheet's aspect ratio
+            left = right - round((bottom - top) * size[0] / size[1])
+        return left, top, right, bottom
 
     def sheet_to_screen(self, frame, size, point) -> tuple[int, int]:
         """Sheet coordinates (10 nm, y up, origin at the sheet centre) to screen pixels."""

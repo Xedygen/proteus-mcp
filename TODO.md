@@ -164,7 +164,9 @@ the passing result in `docs/evidence/`.
       docs/evidence/lab5_buttons.png).
 - [x] 2025 lab6 (scripts/lab6_example.py, docs/evidence/lab6_terminals.png: DEFNODEF): 8251 at I/O 0158H; `A B C 0` gives `DEF`, `K L 0` gives `NO`, `A 1 B ? C n 0` gives `DEF`
       on terminal 2. Remember `SHR AL,1` after reading the 8251 data port.
-- [ ] 2025 lab7 part 1: DAC0830 at 200H, 100 Hz 32-step sine on the scope.
+- [~] 2025 lab7 part 1 (scripts/lab7_example.py): labels renamed, DAC at 200H verified in the netlist, program
+      runs without simulation errors, voltmeter on the output averages 5.99 V (6 V expected). Scope trace not yet
+      captured: the scope only draws while visible on screen; check with background mode off.
 - [ ] 2025 lab8: 8259 vectors 51H and 52H, five ADC samples printed as hex bytes on the terminal.
 - [ ] 2025 odev2: ROM at 20000H, RAM at 60000H, `00.bin` ... `11.bin` loaded, RAM00 / RAM01 contents match
       the sample output in the PDF.

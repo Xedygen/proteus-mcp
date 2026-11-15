@@ -113,3 +113,8 @@ does not (`debug_info=True` adds `/Zi` and `/CO`).
 - `NOT` does not change any flags. `NOT AL` followed by `JZ`/`JNZ` tests whatever the zero flag was before.
   In the lab5 example this made the program ignore every key after the first release. Use `XOR AL, 0FFH`
   (or `NOT AL` then `TEST AL, AL`) when the result is tested.
+
+- lab7 template: the ADC0804's VIN-, A GND and D GND are left open. SPICE then logs "failed to connect pin V-"
+  and the analog side (DAC, op-amp, scope) does not run. Ground them.
+- The Digital Oscilloscope popup does not draw its trace while it is off-screen or hidden (background mode);
+  screenshots of it are blank there. Its window also opens on-screen by itself; background mode moves it.

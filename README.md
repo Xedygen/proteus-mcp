@@ -36,6 +36,10 @@ the display shows 0 to 7 (`docs/evidence/lab5_buttons.png`).
 two 74HC4078 and four NOT gates, the 8251 and terminal wiring, and the program. Typing the PDF's three
 scenarios into terminal 1 prints `DEFNODEF` on terminal 2 (`docs/evidence/lab6_terminals.png`).
 
+`scripts/lab7_example.py` does lab7 part 1 (DAC0830 at 200H, 100 Hz 32-sample sine): renames the YA1..YA6
+placeholders, grounds the ADC pins the template leaves open, writes the program. Netlist checks pass and the
+simulation runs cleanly; the scope trace still needs a look with background mode off.
+
 Not built yet: placing devices that are not already in the file, editing annotated parts' properties/values
 (ROOT.CDB), bus wires/entries, deleting wires, joining a pin to a wire that is already in place (junctions),
 tidy layout of crowded terminals, pressing buttons and typing into virtual terminals during a run.
@@ -94,6 +98,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0` |
 | `schematic_add_part` | Place a copy of an unannotated part already in the design (e.g. a resistor) with its own reference |
 | `schematic_add_terminal` | GND, power or named-net terminal on a pin (`AD0` joins the AD bus line) |
+| `schematic_rename_label` | Rename terminals / wire labels (e.g. lab7's YA1..YA6) |
 | `schematic_set_property`, `schematic_set_value` | Properties / value of unannotated parts (annotated ones live in ROOT.CDB, refused) |
 
 Example prompt: *"Open labs/2025/lab5/taslak.pdsprj with the proteus tools, read labs/2025/lab5/tanım.pdf, write

@@ -243,7 +243,7 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     s = gui.Session.launch(p)
     try:
         for d in devices:
-            frame = s.sheet_frame()
+            frame = s.sheet_frame(size)
             s.place_device(d["device"], frame, size,
                            (round(float(d["x_grid"]) * schematic.GRID), round(float(d["y_grid"]) * schematic.GRID)))
         s.save()
@@ -265,6 +265,13 @@ def schematic_add_terminal(project: str, pin: str, net: str, distance_grid: int 
     joins the AD0 line of an AD[0..15] bus. Placed `distance_grid` steps out on the side the pin faces;
     refuses a position that would touch another pin or wire."""
     return schematic.add_terminal(_closed(project), pin, net, distance_grid)
+
+
+@mcp.tool()
+def schematic_rename_label(project: str, old: str, new: str) -> dict:
+    """Rename all terminals / wire labels named `old` to `new`, e.g. YA6 -> $IO1$ (a $..$ name is written
+    with an overbar). Same-named terminals and labels are connected, so this changes which net they join."""
+    return schematic.rename_label(_closed(project), old, new)
 
 
 @mcp.tool()
@@ -383,8 +390,8 @@ def _part_screen_box(s: gui.Session, ref: str, margin_grid: float = 2.0):
     comp = sheet.component(ref)
     from .devices import pins as part_pins
     pts = [comp["origin"]] + [p["xy"] for p in part_pins(sheet, comp) if not p["hidden"]]
-    frame = s.sheet_frame()
     size = sheet.size()
+    frame = s.sheet_frame(size)
     m = margin_grid * schematic.GRID
     corners = [s.sheet_to_screen(frame, size, (x, y))
                for x in (min(p[0] for p in pts) - m, max(p[0] for p in pts) + m)

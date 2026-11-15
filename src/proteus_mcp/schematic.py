@@ -294,6 +294,26 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
                      for p in pins(sheet, new) if not p["hidden"]]}
 
 
+def rename_label(project: str | Path, old: str, new: str) -> dict:
+    """Rename every terminal and wire label called `old` to `new` (e.g. the lab7 placeholders YA1..YA6).
+    Pins on terminals/labels with the same name are connected, so this moves them onto net `new`."""
+    sheet = load(project)
+    n = 0
+    for o in sheet.objects:
+        if o["type"] == "terminal" and o["label"]["text"] == old:
+            o["label"]["text"] = new
+            n += 1
+        elif o["type"] == "wire":
+            for t in o["labels"]:
+                if t["text"] == old:
+                    t["text"] = new
+                    n += 1
+    if not n:
+        raise dsn.DsnError(f"no terminal or wire label named {old!r}")
+    save(project, sheet)
+    return {"renamed": old, "to": new, "count": n}
+
+
 def set_property(project: str | Path, ref: str, key: str, value: str) -> dict:
     """Set {KEY=VALUE} in a component's property text (added if missing)."""
     sheet = load(project)
