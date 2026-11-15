@@ -32,6 +32,10 @@ buttons with pull-ups, a MASM 5.10 program, then 21 connectivity checks against 
 passing, and the 8086 loading the new program. It then runs the simulation and presses the eight buttons;
 the display shows 0 to 7 (`docs/evidence/lab5_buttons.png`).
 
+`scripts/lab6_example.py` does lab6 (8251 USART): a full address decoder for 0158H/015AH built from the 74154,
+two 74HC4078 and four NOT gates, the 8251 and terminal wiring, and the program. Typing the PDF's three
+scenarios into terminal 1 prints `DEFNODEF` on terminal 2 (`docs/evidence/lab6_terminals.png`).
+
 Not built yet: placing devices that are not already in the file, editing annotated parts' properties/values
 (ROOT.CDB), bus wires/entries, deleting wires, joining a pin to a wire that is already in place (junctions),
 tidy layout of crowded terminals, pressing buttons and typing into virtual terminals during a run.
@@ -82,6 +86,9 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` | `sim_start` also checks that the 8086 loaded the EXE stored in the project |
 | `screenshot`, `debug_window` | Main window or a named window; Debug-menu popups while paused |
 | `sim_click`, `screenshot_part` | Press a button / toggle a switch during a run (real mouse, guarded); close-up of one part |
+| `terminal_type`, `terminal_screenshot` | Type into Virtual Terminals during a run; capture what they show |
+| `schematic_place_devices` | Place new device types from the Proteus libraries (GUI, then saved by Proteus) |
+| `proteus_background` | Background mode (default): Proteus runs off-screen without taking focus; mouse-based tools pause |
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
 | `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |
 | `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0` |

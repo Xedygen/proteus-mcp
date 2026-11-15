@@ -409,6 +409,30 @@ def sim_click(ref: str, hold_seconds: float = 0.3, settle_seconds: float = 0.8) 
 
 
 @mcp.tool()
+def terminal_type(text: str) -> dict:
+    """Type text into the Virtual Terminal(s) during a running simulation (works in background mode).
+    The text goes to every Virtual Terminal window; only a terminal whose TXD pin is wired passes it on.
+    Read the result with terminal_screenshot."""
+    s = _require_session()
+    if s.sim_state() != "running":
+        raise ValueError("the simulation must be running (sim_start)")
+    n = s.terminal_type(text)
+    if not n:
+        raise ValueError("no Virtual Terminal window is open")
+    return {"typed": text, "terminals": n}
+
+
+@mcp.tool()
+def terminal_screenshot() -> list[Image]:
+    """Screenshots of every Virtual Terminal window (in window order), to read what was printed."""
+    s = _require_session()
+    hs = s.terminal_windows()
+    if not hs:
+        raise ValueError("no Virtual Terminal window is open")
+    return [Image(data=gui.png_bytes(gui.capture(h)), format="png") for h in hs]
+
+
+@mcp.tool()
 def screenshot_part(ref: str, margin_grid: float = 3.0) -> Image:
     """Close-up screenshot of one part on the schematic (e.g. the 7-segment display, an LED, a probe),
     during or outside a simulation. Zooms to the whole sheet first."""

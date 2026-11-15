@@ -673,3 +673,19 @@ class Session:
                 return
             time.sleep(0.3)
         raise GuiError(f"project file did not change after Save Project; dialogs: {self.dialogs()}")
+
+    def terminal_windows(self) -> list[int]:
+        """Top-level Virtual Terminal popup windows (they exist while a simulation runs)."""
+        return [h for h in _windows(self.pid) if win32gui.GetWindowText(h).startswith("Virtual Terminal")]
+
+    def terminal_type(self, text: str, delay: float = 0.08, windows: list[int] | None = None) -> int:
+        """Type `text` into Virtual Terminal windows by posting WM_CHAR (no focus needed).  Returns the
+        number of windows typed into."""
+        targets = windows if windows is not None else self.terminal_windows()
+        for ch in text:
+            for h in targets:
+                win32gui.PostMessage(h, win32con.WM_CHAR, ord(ch), 0)
+                for c, _, _ in _children(h):
+                    win32gui.PostMessage(c, win32con.WM_CHAR, ord(ch), 0)
+            time.sleep(delay)
+        return len(targets)
