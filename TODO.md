@@ -176,3 +176,12 @@ the passing result in `docs/evidence/`.
 ## Needs the owner
 
 (Add items here when something cannot be done without the owner.)
+
+- **Proteus missing-symbol warnings on every project load.** Opening any schematic, including Labcenter's own
+  8086 sample, shows `Symbol "$MKRORIGIN" used but not found in libraries.` (sometimes also `$MKRLABEL`)
+  before the schematic appears. The library folder setting is correct and `SYSTEM.LIB` contains the symbols,
+  so this is an install problem (details in `docs/QUIRKS.md`). Please check whether you see it when you open
+  a sample from the Start menu yourself; if so, a repair install from your own installer may fix it. The MCP
+  reads and records these warnings and stops on anything else. Note: during the investigation on 2026-11-14,
+  three of my test launches left such a dialog on screen at the same time before I closed them; that is why
+  several appeared at once.
