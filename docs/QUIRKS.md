@@ -106,3 +106,10 @@ Compared with the shipped `Debug.exe` (2025 lab5 solution): same MZ header field
 relocation table), same load image except where MASM 5.10 encodes a forward `JMP` as a 3-byte near jump where
 MASM 6 used a 2-byte short jump. The shipped file also carries CodeView debug data after the load image; ours
 does not (`debug_info=True` adds `/Zi` and `/CO`).
+
+
+## 8086 code pitfalls found while testing
+
+- `NOT` does not change any flags. `NOT AL` followed by `JZ`/`JNZ` tests whatever the zero flag was before.
+  In the lab5 example this made the program ignore every key after the first release. Use `XOR AL, 0FFH`
+  (or `NOT AL` then `TEST AL, AL`) when the result is tested.

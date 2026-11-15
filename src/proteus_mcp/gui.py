@@ -494,3 +494,82 @@ class Session:
             time.sleep(max(hold, 0.08))
         if action in ("click", "up"):
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+
+    def sheet_frame(self) -> tuple[int, int, int, int]:
+        """Zoom to the entire sheet and return the sheet border's screen rectangle (left, top, right, bottom).
+
+        The border is the outermost blue (0,0,255-ish) line in the editing window."""
+        self.show_schematic()
+        self.command(r"^Zoom To View Entire Sheet")
+        time.sleep(1.0)
+        canvas = self.edit_window()
+        l, t, r, b = win32gui.GetWindowRect(canvas)
+        img = capture(self.main)
+        ml, mt, _, _ = win32gui.GetWindowRect(self.main)
+        crop = img.crop((l - ml, t - mt, r - ml, b - mt)).convert("RGB")
+        px = crop.load()
+        w, h = crop.size
+        blue = lambda x, y: (lambda c: c[2] > 180 and c[0] < 90 and c[1] < 90)(px[x, y])
+        # the border is the only blue line spanning a large part of the view; bus wires and icons are short
+        cols = [x for x in range(w) if sum(blue(x, y) for y in range(0, h, 2)) > h * 0.15]
+        rows = [y for y in range(h) if sum(blue(x, y) for x in range(0, w, 2)) > w * 0.15]
+        if not cols or not rows:
+            raise GuiError("sheet border not found on screen")
+        return l + min(cols), t + min(rows), l + max(cols), t + max(rows)
+
+    def sheet_to_screen(self, frame, size, point) -> tuple[int, int]:
+        """Sheet coordinates (10 nm, y up, origin at the sheet centre) to screen pixels."""
+        left, top, right, bottom = frame
+        w, h = size
+        x = left + (point[0] + w / 2) / w * (right - left)
+        y = top + (h / 2 - point[1]) / h * (bottom - top)
+        return round(x), round(y)
+
+    def canvas_click(self, x: int, y: int, hold: float = 0.3) -> None:
+        """Press and release the left button at screen pixel (x, y) by posting messages to the editing canvas.
+        Needs neither focus nor the real mouse, so it also works from a background process."""
+        canvas = self.edit_window()
+        cx, cy = win32gui.ScreenToClient(canvas, (x, y))
+        lp = win32api.MAKELONG(cx & 0xFFFF, cy & 0xFFFF)
+        win32gui.PostMessage(canvas, win32con.WM_MOUSEMOVE, 0, lp)
+        time.sleep(0.05)
+        win32gui.PostMessage(canvas, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lp)
+        time.sleep(hold)
+        win32gui.PostMessage(canvas, win32con.WM_LBUTTONUP, 0, lp)
+
+    def real_click(self, x: int, y: int, hold: float = 0.3) -> None:
+        """Real mouse press at screen pixel (x, y) on this Proteus.  Proteus actuators read the real mouse,
+        so posted messages do not work.  The window is raised above all others first (topmost on, then off,
+        which needs no foreground rights), and the click is refused if anything else is under the point."""
+        flags = win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
+        win32gui.ShowWindow(self.main, win32con.SW_RESTORE)
+        win32gui.SetWindowPos(self.main, win32con.HWND_TOPMOST, 0, 0, 0, 0, flags)
+        try:
+            # The Alt-key trick in foreground() opens Proteus's menu bar when Proteus already has focus, and
+            # the next click then only closes the menu; so use it only when another window is in front.
+            if win32gui.GetForegroundWindow() != self.main:
+                try:
+                    self.foreground()
+                except Exception:
+                    pass
+            time.sleep(0.2)
+            under = win32gui.WindowFromPoint((x, y))
+            if win32process.GetWindowThreadProcessId(under)[1] != self.pid:
+                raise GuiError(f"another window ({win32gui.GetWindowText(win32gui.GetAncestor(under, 2))!r}) "
+                               "covers the click point; not clicking")
+            # approach the point with real moves (Proteus tracks hover), press, release, then park the
+            # cursor off the canvas so no tooltip or hover state lingers over the next target
+            for dx in (12, 6, 0):
+                win32api.SetCursorPos((x + dx, y + dx))
+                time.sleep(0.05)
+            win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, 1, 0, 0, 0)
+            win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, -1, 0, 0, 0)
+            time.sleep(0.15)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            time.sleep(max(hold, 0.08))
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            time.sleep(0.1)
+            l, t, r, b = win32gui.GetWindowRect(self.main)
+            win32api.SetCursorPos((l + 40, t + 10))       # title bar: off the drawing
+        finally:
+            win32gui.SetWindowPos(self.main, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, flags)

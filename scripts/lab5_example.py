@@ -36,7 +36,7 @@ START:
         OUT PORTA, AL
 MAINLOOP:
         IN  AL, PORTB       ; pressed button reads 0
-        NOT AL
+        XOR AL, 0FFH        ; invert (NOT would leave the flags unchanged, so JZ would test stale ZF)
         JZ  MAINLOOP        ; nothing pressed: keep the digit
         MOV BX, OFFSET TABLE
         MOV CX, 8
@@ -120,6 +120,22 @@ async def main():
                 checks["display common=VCC"] = "VCC" in (await call("net_of", ref=DISPLAY, pin="1"))["net"]
                 sim = await call("sim_start", wait_seconds=3)
                 checks["firmware loaded"] = sim["firmware"].get("matches_project_exe")
+                # press every button and keep a close-up of the display after each press
+                import base64
+                from PIL import Image as PILImage
+                import io
+                shots = []
+                for i, button in enumerate(BUTTONS):
+                    await call("sim_click", ref=button, hold_seconds=0.4)
+                    img = await s.call_tool("screenshot_part", {"ref": DISPLAY, "margin_grid": 1})
+                    data = next(c.data for c in img.content if c.type == "image")
+                    shots.append(PILImage.open(io.BytesIO(base64.b64decode(data))))
+                w, h = shots[0].size
+                strip = PILImage.new("RGB", (w * len(shots), h), "white")
+                for i, im in enumerate(shots):
+                    strip.paste(im, (i * w, 0))
+                strip.save(REPO / "work" / "lab5_example_buttons.png")
+                print("display after pressing buttons 0..7 saved to work/lab5_example_buttons.png")
                 await call("sim_stop")
                 shot = await s.call_tool("screenshot", {})
                 for c in shot.content:

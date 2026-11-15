@@ -85,7 +85,7 @@ about the file format), this file.
       an image the model can look at. Screenshot of a named popup window (Virtual Terminal, Digital
       Oscilloscope, Memory Contents) as well.
 - [x] Read the simulation log / message window as text if it is reachable; otherwise screenshot it.
-- [~] **First end-to-end proof:** (firmware attach answered: replacing Debug.exe in the ZIP works, verified
+- [x] **First end-to-end proof:** (firmware attach answered: replacing Debug.exe in the ZIP works, verified
       by the load size in the log. The display check fails on this install; see Needs the owner.) open the 2025 lab5 solution (`labs/2025/lab5/mert_guler/tasarım.pdsprj`,
       copied to `work/`), rebuild its `main.asm` with the milestone 1 builder, attach the EXE, start the
       simulation, press a button, screenshot, and see the right digit on the 7-segment display.
@@ -95,7 +95,7 @@ about the file format), this file.
       Component dialog must be used. Pick the method that works and document it.
 - [x] Netlist from Proteus itself (Netlist Compiler, logical mode) as the connectivity reference: `netlist`,
       `net_of` tools. This replaces rebuilding nets from DSN geometry for verification.
-- [ ] Interaction: press and release a button, toggle a switch, set a potentiometer, type into a Virtual
+- [x] Interaction: press and release a button (sim_click); typing into a Virtual Terminal still open., toggle a switch, set a potentiometer, type into a Virtual
       Terminal. Clicking needs sheet coordinate to screen coordinate mapping: derive it from the editing
       window's view (zoom-to-fit, then the known sheet extents), and confirm with a click on a known part.
 - [ ] Commit.
@@ -160,7 +160,8 @@ For each lab: start from the template only, follow the PDF, use only the MCP too
 script or a real MCP client), then run the check. Keep the produced project in `work/` and a screenshot of
 the passing result in `docs/evidence/`.
 
-- [ ] 2025 lab5: each of the 8 buttons shows its digit on the 7-segment display.
+- [x] 2025 lab5: each of the 8 buttons shows its digit on the 7-segment display (scripts/lab5_example.py,
+      docs/evidence/lab5_buttons.png).
 - [ ] 2025 lab6: 8251 at I/O 0158H; `A B C 0` gives `DEF`, `K L 0` gives `NO`, `A 1 B ? C n 0` gives `DEF`
       on terminal 2. Remember `SHR AL,1` after reading the 8251 data port.
 - [ ] 2025 lab7 part 1: DAC0830 at 200H, 100 Hz 32-step sine on the scope.

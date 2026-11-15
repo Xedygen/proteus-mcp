@@ -23,15 +23,14 @@ Working and tested through a real MCP client (`scripts/smoke_mcp.py`), on this m
   named-net terminals, change properties and values. Edits are written straight into the project file and
   were confirmed in Proteus 8.6 (opened without new warnings, connections present in Proteus's netlist).
 
-**Blocker:** on this Proteus install the 8086 never reaches its peripherals during simulation, even in
-Labcenter's own 8086 sample, so lab results cannot be checked by simulation yet. See `docs/QUIRKS.md` and the
-"Needs the owner" list in `TODO.md`.
+Proteus was reinstalled on 2026-11-15; simulation of the 8086 labs now works (the earlier install could not
+drive 8086 I/O, see `docs/QUIRKS.md`).
 
 **Worked example:** `scripts/lab5_example.py` completes the 2025 lab5 template (8255 + 7-segment) entirely
 through the MCP tools: address wiring, eight added series resistors, port A to the display, port B to the
 buttons with pull-ups, a MASM 5.10 program, then 21 connectivity checks against Proteus's own netlist, all
-passing, and the 8086 loading the new program. Because of the install fault this is connectivity-verified,
-not simulation-verified.
+passing, and the 8086 loading the new program. It then runs the simulation and presses the eight buttons;
+the display shows 0 to 7 (`docs/evidence/lab5_buttons.png`).
 
 Not built yet: placing devices that are not already in the file, editing annotated parts' properties/values
 (ROOT.CDB), bus wires/entries, deleting wires, joining a pin to a wire that is already in place (junctions),
@@ -82,6 +81,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `proteus_launch`, `proteus_close` | One Proteus instance at a time, only one this server started |
 | `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` | `sim_start` also checks that the 8086 loaded the EXE stored in the project |
 | `screenshot`, `debug_window` | Main window or a named window; Debug-menu popups while paused |
+| `sim_click`, `screenshot_part` | Press a button / toggle a switch during a run (real mouse, guarded); close-up of one part |
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
 | `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |
 | `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0` |

@@ -293,6 +293,10 @@ class Sheet:
         """The name Proteus's netlist uses for a component: its reference, or DEVICE#ID when unannotated."""
         return o["labels"][0]["text"] or f"{o['device']}#{o['identity']:04X}"
 
+    def size(self) -> tuple[int, int]:
+        """Sheet width and height (10 nm units).  The sheet is centred on the origin."""
+        return struct.unpack_from("<ii", self.data, self.circuit + len(SIGNATURE) + 7)
+
     def wires(self) -> list[dict]:
         return [o for o in self.objects if o["type"] == "wire"]
 

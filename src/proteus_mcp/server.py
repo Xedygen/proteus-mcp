@@ -330,6 +330,49 @@ def debug_window(name: str) -> Image:
     return Image(data=gui.png_bytes(gui.capture(h)), format="png")
 
 
+def _part_screen_box(s: gui.Session, ref: str, margin_grid: float = 2.0):
+    sheet = schematic.load(s.project)
+    comp = sheet.component(ref)
+    from .devices import pins as part_pins
+    pts = [comp["origin"]] + [p["xy"] for p in part_pins(sheet, comp) if not p["hidden"]]
+    frame = s.sheet_frame()
+    size = sheet.size()
+    m = margin_grid * schematic.GRID
+    corners = [s.sheet_to_screen(frame, size, (x, y))
+               for x in (min(p[0] for p in pts) - m, max(p[0] for p in pts) + m)
+               for y in (min(p[1] for p in pts) - m, max(p[1] for p in pts) + m)]
+    centre = s.sheet_to_screen(frame, size, comp["origin"])
+    return centre, (min(c[0] for c in corners), min(c[1] for c in corners),
+                    max(c[0] for c in corners), max(c[1] for c in corners))
+
+
+@mcp.tool()
+def sim_click(ref: str, hold_seconds: float = 0.3, settle_seconds: float = 0.8) -> dict:
+    """Press a part during a running simulation: a BUTTON is held for `hold_seconds` then released; a
+    LOGICSTATE or switch toggles. Uses the real mouse on the Proteus window (zooms to the whole sheet first).
+    Follow with screenshot_part to see the effect."""
+    s = _require_session()
+    if s.sim_state() != "running":
+        raise ValueError("the simulation must be running (sim_start)")
+    (x, y), _ = _part_screen_box(s, ref)
+    s.real_click(x, y, hold=hold_seconds)
+    time.sleep(settle_seconds)
+    return {"clicked": ref, "screen": [x, y], "state": s.sim_state()}
+
+
+@mcp.tool()
+def screenshot_part(ref: str, margin_grid: float = 3.0) -> Image:
+    """Close-up screenshot of one part on the schematic (e.g. the 7-segment display, an LED, a probe),
+    during or outside a simulation. Zooms to the whole sheet first."""
+    s = _require_session()
+    _, box = _part_screen_box(s, ref, margin_grid)
+    ml, mt, _, _ = gui.win32gui.GetWindowRect(s.main)
+    img = s.screenshot().crop((box[0] - ml, box[1] - mt, box[2] - ml, box[3] - mt))
+    if img.width < 300:
+        img = img.resize((img.width * 2, img.height * 2))
+    return Image(data=gui.png_bytes(img), format="png")
+
+
 @mcp.tool()
 def netlist(include_single_pin_nets: bool = False) -> dict:
     """Proteus's own netlist of the open project (Netlist Compiler, logical mode): parts and, for every net,
