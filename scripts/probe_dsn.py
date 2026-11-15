@@ -6,7 +6,12 @@ from proteus_mcp.dsn import Reader, DsnError, SIGNATURE, OBJECTS
 def component(r):
     o = {"type": "component", "start": r.offset, "kind": r.u8()}
     o["labels"] = [r.text() for _ in range(4)]
-    o["props"] = r.read(r.u32())
+    n = r.u32()
+    # The 4th text record shows (part of) the property text.  When the stored length equals that text's
+    # length, the text is complete and nothing follows; otherwise the full property text (n bytes) follows.
+    shown = o["labels"][3]["text"].encode("latin-1")
+    o["props_inline"] = len(shown) == n
+    o["props"] = shown if o["props_inline"] else r.read(n)
     pins = r.u16(); o["device"] = r.pstr(); o["origin"] = r.xy()
     o["transform"] = r.read(4); o["identity"] = r.u32(); o["pin_header"] = r.read(9)
     o["pointers"] = [r.u32() for _ in range(pins)]
@@ -32,15 +37,24 @@ def terminal(r):
     o["attributes"] = r.read(6); o["label"] = r.text(); o["pointers"] = [r.u32()]
     return o
 
+def looks_like_wire(data, at):
+    """flags (0 wire, 1 bus) + u32 style length + style ending in b'WIRE\0'."""
+    if data[at] not in (0, 1) or at + 5 > len(data):
+        return False
+    n = struct.unpack_from("<I", data, at + 1)[0]
+    if not 9 <= n <= 512:
+        return False
+    end = at + 1 + n
+    return data[end - 5:end] == b"WIRE\x00"
+
+
 def walk(data, verbose=False):
     c = data.find(SIGNATURE); b = data.find(OBJECTS, c) + len(OBJECTS)
-    r = Reader(data, b); objs = []; seen = set(); pending = []
+    r = Reader(data, b); objs = []
     while data[r.offset] != 0xFF:
         at = r.offset
         try:
-            if pending:
-                exp = pending.pop(0)
-                if at != exp: raise DsnError(f"wire order mismatch at {at:#x} expected {exp:#x}")
+            if looks_like_wire(data, at):
                 o = wire(r)
             else:
                 k = data[at]
@@ -51,11 +65,15 @@ def walk(data, verbose=False):
         except Exception as e:
             return objs, f"{e} at {at:#x}", at
         objs.append(o)
-        for p in o.get("pointers", []):
-            if p:
-                if p in seen: pending.append(p)
-                else: seen.add(p)
-    return objs, None, r.offset
+    end = r.offset
+    second = data.find(SIGNATURE, c + 1)
+    if second != end + 1:
+        return objs, f"terminator at {end:#x} but second sheet at {second:#x}", end
+    starts = {o["start"] for o in objs if o["type"] == "wire"}
+    bad = [hex(p) for o in objs for p in o.get("pointers", []) if p and p not in starts]
+    if bad:
+        return objs, f"pointers to non-wire offsets {bad[:5]}", end
+    return objs, None, end
 
 if __name__ == "__main__":
     base = sys.argv[1]
