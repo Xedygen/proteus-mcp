@@ -196,7 +196,13 @@ the passing result in `docs/evidence/`.
 - [ ] Junction taps (connect a pin to a wire that is already there); deleting single wires.
 - [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
 - [ ] 2024 labs as extra cases; one circuit drawn from scratch.
-- [ ] A real end-to-end session: Claude Desktop/Code with only the PDF and the tools, no example script.
+- [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
+      work/e2e/prompt_*.txt):
+      - [x] lab5 (2026-11-16): all 8 keys show their digit; 41 turns after a restart. It found 4 tool problems,
+            all fixed (first sim_click lost, docked debug panels, clash message, 8255 log note).
+      - [ ] lab8 (running)
+      - [ ] lab6, odev2
+      - Note: the advisor server tool hangs headless sessions; run with --disallowedTools advisor.
 
 ## Review findings still open (Fable review, 2026-11-15)
 
