@@ -618,22 +618,40 @@ def screenshot_part(ref: str, margin_grid: float = 3.0) -> Image:
 @mcp.tool()
 def netlist(include_single_pin_nets: bool = False) -> dict:
     """Proteus's own netlist of the open project (Netlist Compiler, logical mode): parts and, for every net,
-    the pins on it as REF.PIN. Unannotated parts appear as DEVICE#id. The simulation must be stopped."""
+    the pins on it as REF.PIN. Unannotated parts appear as DEVICE#id. The simulation must be stopped the first
+    time; the result is kept for the rest of this Proteus session (the design cannot change while it is open)."""
     s = _require_session()
-    out = PROJECTS / f"{s.project.stem}_{int(time.time())}.sdf"
-    path = s.netlist(out)
-    n = parse_netlist(path.read_text(encoding="latin-1"))
+    n, path = _session_netlist(s)
     return n.summary(include_single_pin_nets) | {"file": str(path)}
+
+
+_NETLIST: dict = {}
+
+
+def _session_netlist(s: gui.Session):
+    if _NETLIST.get("session") is not s:
+        out = PROJECTS / f"{s.project.stem}.sdf"          # one file per project, replaced each session
+        for old in PROJECTS.glob(f"{s.project.stem}_*.sdf"):
+            old.unlink(missing_ok=True)                  # files left by earlier versions
+        path = s.netlist(out)
+        _NETLIST.update(session=s, netlist=parse_netlist(path.read_text(encoding="latin-1")), path=path)
+    return _NETLIST["netlist"], _NETLIST["path"]
 
 
 @mcp.tool()
 def net_of(ref: str, pin: str) -> dict:
-    """Which net a pin is on, and every pin on that net. Pin by name as in the netlist (e.g. U3 PA0, U1 WR/LOCK)."""
+    """Which net a pin is on, and every pin on that net. Pin by name as in the netlist (e.g. U3 PA0, U1 WR/LOCK;
+    overbars are dropped: $CS$ -> CS). An unconnected pin has a net of its own with just that pin; an unknown
+    part or pin is an error that lists the valid names."""
     s = _require_session()
-    out = PROJECTS / f"{s.project.stem}_{int(time.time())}.sdf"
-    n = parse_netlist(s.netlist(out).read_text(encoding="latin-1"))
+    n, _ = _session_netlist(s)
+    refs = set(n.parts) | {r for members in n.nets.values() for r, _ in members}
+    if ref.upper() not in {r.upper() for r in refs}:
+        raise ValueError(f"no part {ref!r} in the netlist; parts: {sorted(refs)}")
     name = n.net_of(ref, pin)
-    return {"net": name, "members": [f"{r}.{p}" for r, p in n.nets.get(name, [])] if name else []}
+    if name is None:
+        raise ValueError(f"{ref} has no pin {pin!r}; its pins: {sorted(n.pins_of(ref))}")
+    return {"net": name, "members": [f"{r}.{p}" for r, p in n.nets.get(name, [])]}
 
 
 def main() -> None:

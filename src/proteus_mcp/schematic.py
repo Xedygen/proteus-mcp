@@ -253,6 +253,11 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     return {"pin": pin, "terminal": kind, "net": net, "terminal_grid": [t[0] / GRID, t[1] / GRID]}
 
 
+def _num(x: float) -> str:
+    """Plain decimal for a property value (640000, 9600, 1.5): Proteus files never use exponent form."""
+    return str(int(x)) if float(x).is_integer() else repr(float(x))
+
+
 def _next_identity(sheet: dsn.Sheet) -> int:
     """Components and instruments share one identity space (an instrument's u16 field); Proteus derives
     references from it, so a clash shows up as "Duplicate part reference" at simulation start."""
@@ -282,10 +287,17 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
     if out not in ((-1, 0), (1, 0)):
         raise dsn.DsnError("generators on top/bottom pins are not supported; use a terminal and a "
                            "generator on a left/right pin elsewhere")
+    if not frequency_hz > 0:
+        raise dsn.DsnError("frequency_hz must be positive")
+    if distance_grid < 1:
+        raise dsn.DsnError("distance_grid must be at least 1")
     name = name or f"{sheet.name_of(comp)}({p['name']})"
     used = {o["labels"][0]["text"] for o in sheet.objects if o["type"] == "instrument"}
+    used |= {o["label"]["text"] for o in sheet.objects if o["type"] == "terminal"}
+    used |= {lab["text"] for w in sheet.wires() for lab in w["labels"]}
     if name in used:
-        raise dsn.DsnError(f"a generator named {name} exists already")
+        raise dsn.DsnError(f"the name {name} is already a generator, terminal or wire label; a generator's "
+                           "name labels its net, so pick another")
     mirror = 0 if out == (-1, 0) else 1                # mirror 0: body on the left, output to the right
     origin = [p["xy"][0] + distance_grid * GRID * out[0], p["xy"][1]]
     _check_clear(sheet, [p["xy"], origin], [p["xy"]])
@@ -294,7 +306,7 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
         raise dsn.DsnError("no existing wire to copy the style from")
     side = 1 if mirror else -1
     label_tf = "000000000" if mirror else "000001000"
-    props = (f"{{INIT=LOW}}\n{{START=0}}\n{{COUNT=-1}}\n{{CLOCK={frequency_hz:g}}}\n"
+    props = (f"{{INIT=LOW}}\n{{START=0}}\n{{COUNT=-1}}\n{{CLOCK={_num(frequency_hz)}}}\n"
              f"{{MANUALEDITS=FALSE}}\n{{HIDDENPROPS=TRUE}}\n").encode()
     ident = _next_identity(sheet)
     ids = {o["id"] for o in sheet.objects if o["type"] == "instrument"}
@@ -356,7 +368,9 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
         # U8), so reuse the prefix of an annotated part of the same device when there is one.
         same = [o["labels"][0]["text"] for o in sheet.components()
                 if o["device"] == src["device"] and o["labels"][0]["text"]]
-        prefix = re.sub(r"[^A-Za-z]", "", same[0]) if same else ("R" if src["device"].upper() == "RES" else "U")
+        # leading letters only: "U9:A" (a gate of a multi-gate package) gives "U", not "UA"
+        prefix = (re.match(r"[A-Za-z]*", same[0]).group() or "U") if same else \
+            ("R" if src["device"].upper() == "RES" else "U")
         n = 1
         while f"{prefix}{n}" in used:
             n += 1

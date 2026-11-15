@@ -410,7 +410,17 @@ class Session:
         time.sleep(max(settle - min(settle, 1.0), 0))
         self.handle_dialogs()
         self.hide_popups()
-        return self.sim_state()
+        # a slow start (netlist compile, big design) or stop can take longer than `settle`: wait for the
+        # state the command asks for, a few more seconds at most; a failed start stays "stopped"
+        want = {"start": "running", "pause": "paused", "stop": "stopped"}[action]
+        deadline = time.monotonic() + 8
+        state = self.sim_state()
+        while state != want and time.monotonic() < deadline:
+            if action == "start" and self.compiler_errors():
+                break
+            time.sleep(0.4)
+            state = self.sim_state()
+        return state
 
     def find_child(self, title: str, cls: str | None = None) -> int | None:
         for c, k, t in _children(self.main):
