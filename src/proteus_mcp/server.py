@@ -198,6 +198,16 @@ def schematic_connect(project: str, a: str, b: str, via_x_grid: float | None = N
 
 
 @mcp.tool()
+def schematic_add_part(project: str, like: str, x_grid: float, y_grid: float, rotation: int | None = None,
+                       value: str | None = None, ref: str | None = None) -> dict:
+    """Place a copy of a part already in the design, e.g. like="RES#0010" (an unannotated resistor), at a
+    grid position (0.1 inch units, y up; schematic_components shows where things are). Gets reference `ref`
+    (default e.g. R1) and optional new `value`. Only devices already present in the file can be placed, and
+    only by copying an unannotated instance. Refuses positions where a pin would land on something."""
+    return schematic.add_part(_closed(project), like, x_grid, y_grid, rotation, value, ref)
+
+
+@mcp.tool()
 def schematic_add_terminal(project: str, pin: str, net: str) -> dict:
     """Attach a terminal to an unconnected pin, e.g. pin="U3.RESET", net="GND".
 

@@ -234,6 +234,62 @@ def add_terminal(project: str | Path, pin: str, net: str) -> dict:
     return {"pin": pin, "terminal": kind, "net": net, "terminal_grid": [t[0] / GRID, t[1] / GRID]}
 
 
+_ROTATIONS = {0: 0, 90: 900, 180: 1800, 270: 2700}
+
+
+def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotation: int | None = None,
+             value: str | None = None, ref: str | None = None) -> dict:
+    """Place a copy of an existing UNANNOTATED part (e.g. like="RES#0010") at a grid position.
+
+    Only devices already in the file can be placed (their library definition is embedded), and only
+    unannotated ones, because annotated parts also need a ROOT.CDB record that cannot be written yet.
+    The copy gets its own reference (`ref`, default: device initial + next free number, e.g. R1), because
+    Proteus annotates unreferenced copies itself on load.  It has no wires."""
+    import copy
+    sheet = load(project)
+    src = sheet.component(like)
+    if src["labels"][0]["text"]:
+        raise dsn.DsnError(f"{like} is annotated; only unannotated parts (resistors, buttons ...) can be copied")
+    new = copy.deepcopy(src)
+    origin = [round(x_grid * GRID / (GRID // 2)) * (GRID // 2), round(y_grid * GRID / (GRID // 2)) * (GRID // 2)]
+    dx, dy = origin[0] - src["origin"][0], origin[1] - src["origin"][1]
+    new["origin"] = origin
+    for t in new["labels"]:
+        t["xy"] = [t["xy"][0] + dx, t["xy"][1] + dy]
+    if rotation is not None:
+        if rotation not in _ROTATIONS:
+            raise dsn.DsnError("rotation must be 0, 90, 180 or 270")
+        _, mirror = struct.unpack("<hH", new["transform"])
+        new["transform"] = struct.pack("<hH", _ROTATIONS[rotation], mirror)
+    if value is not None:
+        new["labels"][1]["text"] = value
+    new["identity"] = max(o["identity"] for o in sheet.components()) + 1
+    used = {o["labels"][0]["text"].upper() for o in sheet.components()}
+    if ref is None:
+        prefix = re.sub(r"[^A-Z]", "", src["device"].upper())[:1] or "X"
+        n = 1
+        while f"{prefix}{n}" in used:
+            n += 1
+        ref = f"{prefix}{n}"
+    elif ref.upper() in used:
+        raise dsn.DsnError(f"reference {ref} is already used")
+    new["labels"][0]["text"] = ref
+    new["pointers"] = [0] * len(new["pointers"])
+    new["start"] = None
+    # the new part's pins must not land on anything existing
+    spots = _hot_spots(sheet)
+    sheet.objects.append(new)
+    clash = [p for p in pins(sheet, new) if tuple(p["xy"]) in spots and not p["hidden"]]
+    if clash:
+        raise dsn.DsnError(f"pin {clash[0]['name']} would land on an existing connection point at "
+                           f"{[clash[0]['xy'][0] / GRID, clash[0]['xy'][1] / GRID]}")
+    sheet.reschedule()
+    save(project, sheet)
+    return {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID],
+            "pins": [{"name": p["name"], "grid": [p["xy"][0] / GRID, p["xy"][1] / GRID]}
+                     for p in pins(sheet, new) if not p["hidden"]]}
+
+
 def set_property(project: str | Path, ref: str, key: str, value: str) -> dict:
     """Set {KEY=VALUE} in a component's property text (added if missing)."""
     sheet = load(project)
