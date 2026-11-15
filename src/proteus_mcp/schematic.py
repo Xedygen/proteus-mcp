@@ -394,6 +394,31 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
                      for p in pins(sheet, new) if not p["hidden"]]}
 
 
+def labels(project: str | Path) -> dict:
+    """Net names on the sheet without Proteus: every terminal and wire label, with the pins wired straight to
+    them (a terminal's wire usually ends on one pin).  Power/ground terminals appear as GND / POWER.  Pins
+    reached only through longer wire chains or junctions are not followed; use net_of for full nets."""
+    sheet = load(project)
+    owner: dict[int, list[str]] = {}
+    for comp in sheet.components():
+        for pin, ptr in zip(pins(sheet, comp), comp["pointers"]):
+            if ptr:
+                owner.setdefault(ptr, []).append(f"{sheet.name_of(comp)}.{pin['name']}")
+    out: dict[str, dict] = {}
+    for o in sheet.objects:
+        if o["type"] == "terminal":
+            name = o["label"]["text"] or {"$TERGROUND": "GND", "$TERPOWER": "POWER"}.get(o["device"], o["device"])
+            e = out.setdefault(name, {"terminals": 0, "wire_labels": 0, "pins": []})
+            e["terminals"] += 1
+            e["pins"] += owner.get(o["pointers"][0], [])
+        elif o["type"] == "wire":
+            for lab in o["labels"]:
+                e = out.setdefault(lab["text"], {"terminals": 0, "wire_labels": 0, "pins": []})
+                e["wire_labels"] += 1
+                e["pins"] += owner.get(o["start"], [])
+    return dict(sorted(out.items()))
+
+
 def move_part(project: str | Path, ref: str, x_grid: float, y_grid: float) -> dict:
     """Move a part that has no wires yet to a grid position (e.g. right after schematic_place_devices, whose
     drop point is only approximate).  Its labels move with it; refuses if a pin would land on an existing

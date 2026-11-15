@@ -127,6 +127,7 @@ def proteus_background(on: bool | None = None) -> dict:
                 _session.hide()
             else:
                 gui.win32gui.ShowWindow(_session.main, gui.win32con.SW_MAXIMIZE)
+                _session.show_popups()
     return {"background": gui.BACKGROUND["on"]}
 
 
@@ -337,6 +338,14 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
         raise gui.GuiError(f"asked for {[d['device'] for d in devices]} but only "
                            f"{[c['ref'] + ' ' + c['device'] for c in placed]} appeared after saving")
     return placed
+
+
+@mcp.tool()
+def schematic_labels(project: str) -> dict:
+    """Offline list of net names on the sheet: every terminal / wire label name with how often it appears and
+    the pins wired straight to it, e.g. to find a template's placeholder labels (YA1..) or existing nets
+    (A0..A19, AD0..AD15, $RD$). Use net_of in a running Proteus for complete nets."""
+    return schematic.labels(_project(project))
 
 
 @mcp.tool()

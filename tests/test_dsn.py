@@ -132,3 +132,14 @@ def test_bus_terminal_on_bus_pin(tmp_path):
     assert wire["flags"] == 1                                   # bus wire
     with pytest.raises(dsn.DsnError):
         schematic.add_terminal(proj, "U9.D[0..7]", "DATA")     # bus pin needs a bus name
+
+
+LAB7 = REPO / "labs" / "2025" / "lab7" / "taslak.pdsprj"
+
+
+@pytest.mark.skipif(not LAB7.exists(), reason="labs/ not present")
+def test_labels_find_placeholders():
+    from proteus_mcp import schematic
+    names = schematic.labels(LAB7)
+    assert {"YA1", "YA6", "AD0"} <= set(names)
+    assert names["$IO1$"]["pins"] == ["U5.1"]

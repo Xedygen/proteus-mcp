@@ -276,6 +276,17 @@ class Session:
             if l < right:
                 win32gui.SetWindowPos(h, 0, right + 60 + (l % 400), t, 0, 0, flags)
 
+    def show_popups(self) -> None:
+        """Undo hide_popups: bring popups that sit beyond the right edge of the desktop back on screen."""
+        right = user32.GetSystemMetrics(76) + user32.GetSystemMetrics(78)
+        flags = win32con.SWP_NOACTIVATE | win32con.SWP_NOZORDER | win32con.SWP_NOSIZE
+        for i, h in enumerate(_windows(self.pid)):
+            if h == self.main or win32gui.GetClassName(h) == "#32770":
+                continue
+            l, t, r, b = win32gui.GetWindowRect(h)
+            if l >= right:
+                win32gui.SetWindowPos(h, 0, 120 + 40 * (i % 8), max(t, 80), 0, 0, flags)
+
     def show_schematic(self, timeout: float = 5.0) -> None:
         """Bring the Schematic Capture tab to the front.  Proteus restores the last tab per project and
         switches to Source Code when a simulation pauses; that tab has no Tool menu."""
