@@ -185,10 +185,12 @@ _TERMINALS = {
     # rotated forms (-90 / +90 degrees): connection offsets measured (-90) and derived (+90) by rotation
     ("$TERDEFAULT", "up"): ("7cfc0000", (0, -GRID), (0, 381000), "000001000800"),
     ("$TERDEFAULT", "down"): ("84030000", (0, GRID), (0, -381000), "000001000800"),
+    ("$TERBUS", "left"): ("00000000", (GRID, 0), (-254000, 0), "000001000800"),
+    ("$TERBUS", "right"): ("00000100", (-GRID, 0), (254000, 0), "000000000800"),
     ("$TERGROUND", None): ("00000000", (0, GRID), (-254000, -508000), "000000000800"),
     ("$TERPOWER", None): ("00000000", (0, -GRID), (-254000, 508000), "000000000800"),
 }
-_ATTRIBUTES = {"$TERDEFAULT": "090000000000", "$TERGROUND": "0d0000000000", "$TERPOWER": "0d0000000000"}
+_ATTRIBUTES = {"$TERDEFAULT": "090000000000", "$TERBUS": "090000000000", "$TERGROUND": "0d0000000000", "$TERPOWER": "0d0000000000"}
 
 
 def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2) -> dict:
@@ -204,13 +206,20 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
         raise dsn.DsnError(f"{pin} is a hidden power pin")
     kind = {"GND": "$TERGROUND", "VCC": "$TERPOWER", "POWER": "$TERPOWER", "VDD": "$TERPOWER"}.get(
         net.upper(), "$TERDEFAULT")
+    if p["bus"]:
+        # a bus pin (e.g. D[0..7]) takes a bus terminal named like AD[0..7] and a bus wire
+        if not re.fullmatch(r".+\[\d+\.\.\d+\]", net):
+            raise dsn.DsnError(f"{pin} is a bus pin; give a bus name such as AD[0..7]")
+        kind = "$TERBUS"
     library = sheet.data[:sheet.circuit]
     if kind.encode() + b"\0" not in library and bytes([len(kind)]) + kind.encode() not in library:
         raise dsn.DsnError(f"{kind} is not in this file's embedded library; place one in Proteus first")
     out = p["out"]                                   # the side the pin faces, from the pin record
     t = [p["xy"][0] + distance_grid * GRID * out[0], p["xy"][1] + distance_grid * GRID * out[1]]
-    if kind == "$TERDEFAULT":
+    if kind in ("$TERDEFAULT", "$TERBUS"):
         facing = {(-1, 0): "left", (1, 0): "right", (0, 1): "up", (0, -1): "down"}[tuple(out)]
+        if kind == "$TERBUS" and facing not in ("left", "right"):
+            raise dsn.DsnError("bus terminals on top/bottom pins are not supported")
     else:
         facing = None
     transform, conn, label_off, label_tf = _TERMINALS[(kind, facing)]
@@ -219,15 +228,18 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     template = next((o for o in sheet.objects if o["type"] == "terminal"), None)
     if template is None:
         raise dsn.DsnError("no terminal in this file to copy the label style from")
-    wire_tpl = next((w for w in sheet.wires() if w["flags"] == 0), None)
+    want_flags = 1 if kind == "$TERBUS" else 0
+    wire_tpl = next((w for w in sheet.wires() if w["flags"] == want_flags), None)
+    if wire_tpl is None:
+        raise dsn.DsnError("no existing wire of that kind (bus/normal) to copy the style from")
     key = sheet.new_key()
-    label = {"text": "" if kind != "$TERDEFAULT" else net, "xy": [origin[0] + label_off[0], origin[1] + label_off[1]],
+    label = {"text": net if kind in ("$TERDEFAULT", "$TERBUS") else "", "xy": [origin[0] + label_off[0], origin[1] + label_off[1]],
              "transform": bytes.fromhex(label_tf), "style": template["label"]["style"]}
     term = {"type": "terminal", "origin": origin, "transform": bytes.fromhex(transform), "device": kind,
             "attributes": bytes.fromhex(_ATTRIBUTES[kind]), "label": label, "pointers": [key]}
     sheet.objects.append(term)
-    sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": wire_tpl["style"], "labels": [],
-                          "points": [p["xy"], t]})
+    sheet.objects.append({"type": "wire", "start": key, "flags": want_flags, "style": wire_tpl["style"],
+                          "labels": [], "points": [p["xy"], t]})
     comp["pointers"][p["slot"]] = key
     sheet.reschedule()
     save(project, sheet)

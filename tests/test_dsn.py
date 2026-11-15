@@ -114,3 +114,21 @@ def test_add_part_copies(tmp_path):
     assert schematic.add_part(proj, "U2", 0, 40)["part"] == "U4"   # annotated source: same prefix, next number
     with pytest.raises(dsn.DsnError):
         schematic.add_part(proj, "RES#0010", 30, 20)          # pins would land on R1's pins
+
+
+LAB8 = REPO / "labs" / "2025" / "lab8" / "taslak.pdsprj"
+
+
+@pytest.mark.skipif(not LAB8.exists(), reason="labs/ not present")
+def test_bus_terminal_on_bus_pin(tmp_path):
+    from proteus_mcp import pdsprj, schematic
+    proj = pdsprj.copy(LAB8, tmp_path / "t.pdsprj")
+    r = schematic.add_terminal(proj, "U5.D[0..7]", "AD[0..7]")
+    assert r["terminal"] == "$TERBUS"
+    sheet = schematic.load(proj)
+    term = next(o for o in sheet.objects if o["type"] == "terminal" and o["label"]["text"] == "AD[0..7]"
+                and o["origin"][0] == round(r["terminal_grid"][0] * dsn.GRID) - dsn.GRID)
+    wire = next(w for w in sheet.wires() if w["start"] == term["pointers"][0])
+    assert wire["flags"] == 1                                   # bus wire
+    with pytest.raises(dsn.DsnError):
+        schematic.add_terminal(proj, "U9.D[0..7]", "DATA")     # bus pin needs a bus name
