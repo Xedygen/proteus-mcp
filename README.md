@@ -30,7 +30,8 @@ drive 8086 I/O, see `docs/QUIRKS.md`).
 these tools and the Read tool and given just the lab's PDF path, completed lab5 (all 8 keys show their digit),
 lab6 (8251 with a full 0158H decoder; DEF / NO / DEF on terminal 2), odev2 (ROM/RAM map; RAM shows the
 PDF's bytes) and lab8 (interrupt-driven ADC samples printed in hex, changing with the pot) on its own, including exporting
-the project and reporting how each requirement was checked. Prompts: `e2e/prompt_*.txt`. The tool problems
+the project and reporting how each requirement was checked. With only "do the lab in this PDF" as the prompt,
+a session also finished lab7 (LDR-controlled motor speed) with no tool errors. Prompts: `e2e/prompt_*.txt`. The tool problems
 those sessions reported are fixed. Run one yourself:
 
 ```powershell
