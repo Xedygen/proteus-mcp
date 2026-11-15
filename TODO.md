@@ -188,8 +188,17 @@ the passing result in `docs/evidence/`.
 - [x] lab8: decoder, 8259/8251/ADC wiring, interrupt-driven program, 9600 Hz generators, POT-HG, hex terminal
       (`scripts/lab8_example.py`, evidence `docs/evidence/lab8_pot_terminal.png`).
 - [x] Deleting parts (`schematic_delete`), moving unwired parts (`schematic_move`), `lab_list`.
-- [ ] odev2: OR gates for the ROM0x/ROM1x/RAM chip selects via schematic_place_devices (template has only
-      NOT); ROM images are referenced as 00.bin..11.bin relative to the project, copy them next to it.
+- [ ] odev2 (next). Findings so far:
+      - ROM routines (interleaved 00/01 and 10/11 images): 2000:0000 sets DS=6000H, writes 1234H to [0]
+        -> RAM00[0]=34, RAM01[0]=12; 2800:0002 sets DS=6002H, writes ABCDH -> RAM00[10H]=CD, RAM01[10H]=AB
+        (matches the PDF's memory dump). Call them with DB 9AH / DW off, seg (far call) in ENDLESS.
+      - ROM FILE properties are 00.bin..11.bin relative to the project: project_open/project_export must
+        copy referenced files next to the copy (add that to the tools).
+      - Plan: two 74LS138 (even: G2B=A0, odd: G2B=BHE), C,B,A = A18,A17,A16, G1 = M/IO, G2A = A19;
+        Y2 = ROM block, Y6 = RAM. ROMx0 /CE = Y2 OR A15, ROMx1 /CE = Y2 OR NOT A15 (place one "OR" with
+        schematic_place_devices, copy it with schematic_add_part; NOT = copy of U8). ROM /OE = /RD,
+        RAM /CE = Y6, /OE = /RD, /WE = /WR. ROM A0..A13 <- A1..A14, RAM A0..A14 <- A1..A15,
+        even data AD0..7, odd AD8..15. Check: debug_window "Memory Contents - RAM00/RAM01" while paused.
 - [ ] lab7: look at the scope trace (background mode off) and confirm 100 Hz; part 2: move the light source.
 - [ ] Junction taps (connect a pin to a wire that is already there); deleting single wires.
 - [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
