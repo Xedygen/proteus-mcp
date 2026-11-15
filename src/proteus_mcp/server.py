@@ -381,7 +381,8 @@ def schematic_check(project: str) -> dict:
 def schematic_labels(project: str) -> dict:
     """Offline list of net names on the sheet: every terminal / wire label name with how often it appears and
     the pins wired straight to it, e.g. to find a template's placeholder labels (YA1..) or existing nets
-    (A0..A19, AD0..AD15, $RD$). Use net_of in a running Proteus for complete nets."""
+    (A0..A19, AD0..AD15, $RD$), and clock generators with their frequency. Use net_of in a running Proteus
+    for complete nets."""
     return schematic.labels(_project(project))
 
 
