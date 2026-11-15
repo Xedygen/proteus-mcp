@@ -204,13 +204,13 @@ Fixed already: readable tool errors, project_open name clash, proteus_close keep
 exit cleanup, set_property backslashes, README Desktop JSON, stale quirks text and server instructions,
 place-devices verification, generator identity clash.
 
-- [ ] add_generator: no embedded-library check for `$DCLOCK0`; name may collide with a net label; `:g` turns
-      1000000 into `1e+06`; distance_grid unvalidated.
-- [ ] Pin lookup on the 74154: names "0".."15" collide with pin numbers; echo the resolved pin in results.
-- [ ] net_of: tell "no such pin" from "unconnected"; one SDF file per call is left in work/projects.
-- [ ] sim(): poll for the expected state instead of a fixed sleep; sim_log pauses/resumes as a side effect.
-- [ ] Turning background mode off should bring hidden popups back on screen.
-- [ ] add_part: prefix for multi-gate parts (U9:A -> UA1); rotation leaves labels unrotated.
+- [x] add_generator input checks (name vs net labels, plain-number frequency, distance). Embedded-library
+      check for `$DCLOCK0` still open (only matters for files that never held a generator).
+- [x] Wiring results echo the resolved pin name and number (74154 "5" = Y5, pin 6).
+- [x] net_of errors on unknown parts/pins; netlist compiled once per Proteus session, one SDF per project.
+- [x] sim() waits for the requested state. (sim_log still pauses/resumes when the log popup is closed.)
+- [x] Turning background mode off brings hidden popups back on screen.
+- [x] add_part prefix for multi-gate parts. (Rotation still leaves labels unrotated.)
 - [ ] _check_clear misses a corner landing mid-wire; parts with unparsable pin tables are unprotected.
-- [ ] Missing tools: dialog_answer, offline schematic_labels / nets listing, rom_load (odev2).
+- [ ] Missing tools: dialog_answer. (schematic_labels added; ROM images now travel with the project.)
 - [ ] Docs: FORMAT.md stale "6 of 27 parse" section and NUL bytes near line 121.
