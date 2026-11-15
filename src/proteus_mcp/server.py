@@ -139,8 +139,9 @@ def quirks() -> str:
 
 @mcp.tool()
 def lab_list(filter: str = "") -> list[dict]:
-    """Lab folders under labs/ that have an assignment PDF (tanım.pdf) or a template (taslak.pdsprj), with
-    absolute paths: open the template with project_open. `filter` matches the folder path, e.g. "2025/lab8".
+    """Lab folders under labs/ that have an assignment PDF (tanım.pdf) or a template (taslak.pdsprj or
+    proteus_sablon.pdsprj), with absolute paths: open the template with project_open. `filter` matches the
+    folder path, e.g. "2025/lab8". A lab without a template starts from scratch or from a reference.
     Other .pdsprj files in a folder (student solutions) are listed as references, not as starting points."""
     labs = paths.REPO / "labs"
     out = []
@@ -149,7 +150,9 @@ def lab_list(filter: str = "") -> list[dict]:
         if filter and filter.lower() not in rel.lower():
             continue
         pdfs = sorted(str(p) for p in d.glob("*.pdf"))
-        template = next((str(p) for p in d.glob("taslak*.pdsprj")), None)
+        # 2025 templates are taslak.pdsprj, 2024 ones proteus_sablon.pdsprj
+        template = next((str(p) for p in sorted(d.glob("*.pdsprj"))
+                         if re.search(r"taslak|sablon|şablon|template", p.stem, re.I)), None)
         if not pdfs and not template:
             continue
         others = sorted(str(p) for p in d.glob("**/*.pdsprj") if str(p) != template)
