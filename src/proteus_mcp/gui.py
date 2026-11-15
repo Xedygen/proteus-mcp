@@ -138,6 +138,10 @@ class Session:
         project = Path(project).resolve()
         if not project.is_file():
             raise FileNotFoundError(project)
+        # Proteus keeps per-project window state in "<project>.<host>.<user>.workspace"; a stale one can
+        # reopen the project on another tab or with popups, so start clean.
+        for ws in project.parent.glob(project.name + ".*.workspace"):
+            ws.unlink(missing_ok=True)
         proc = subprocess.Popen([str(paths.PDS_EXE), str(project)], cwd=str(paths.PDS_EXE.parent))
         s = cls(project, proc)
         try:
@@ -207,15 +211,49 @@ class Session:
             self.handle_dialogs()
             mains = [h for h in _windows(self.pid) if win32gui.GetClassName(h).startswith("LX_APPLN")
                      and stem in win32gui.GetWindowText(h)]
-            if mains and "Schematic Capture" in win32gui.GetWindowText(mains[0]):
+            # The title ends with the active tab, which Proteus restores per project (Schematic Capture,
+            # Source Code, ...), so any "<stem> - Proteus 8 Professional - <tab>" title counts.
+            if mains and " - Proteus 8 Professional - " in win32gui.GetWindowText(mains[0]):
                 quiet += 1
                 if quiet >= 4:  # stable for 2 s with no dialog
                     self.main = mains[0]
+                    self.show_schematic()
                     return self.main
             else:
                 quiet = 0
             time.sleep(0.5)
         raise GuiError(f"main window for {stem} did not appear in {timeout}s; windows={self.windows()}")
+
+    def show_schematic(self, timeout: float = 5.0) -> None:
+        """Bring the Schematic Capture tab to the front.  Proteus restores the last tab per project and
+        switches to Source Code when a simulation pauses; that tab has no Tool menu."""
+        if "Schematic Capture" in win32gui.GetWindowText(self.main):
+            return
+        # The document tab strip is an untitled Labcenter window (class LX_APPLN_*), about 37 px high,
+        # spanning the main window just below the toolbars.  Its first tab is Schematic Capture.
+        ml, mt, mr, mb = win32gui.GetWindowRect(self.main)
+        strips = []
+        for c, cls, t in _children(self.main):
+            if win32gui.GetParent(c) != self.main or t or not cls.startswith("LX_APPLN"):
+                continue
+            if not win32gui.IsWindowVisible(c):
+                continue
+            l, t_, r, b = win32gui.GetWindowRect(c)
+            if 20 <= b - t_ <= 50 and r - l > (mr - ml) // 2:
+                strips.append((t_, c))
+        if not strips:
+            raise GuiError("document tab strip not found")
+        bar = min(strips)[1]
+        l, t, r, b = win32gui.GetWindowRect(bar)
+        lp = win32api.MAKELONG(60, (b - t) // 2)
+        win32gui.PostMessage(bar, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lp)
+        win32gui.PostMessage(bar, win32con.WM_LBUTTONUP, 0, lp)
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            if "Schematic Capture" in win32gui.GetWindowText(self.main):
+                return
+            time.sleep(0.2)
+        raise GuiError(f"could not switch to Schematic Capture (title {win32gui.GetWindowText(self.main)!r})")
 
     def kill(self) -> None:
         if self.alive():
@@ -346,6 +384,70 @@ class Session:
         if resume:
             self.sim("start")
         return rows
+
+    # ----- netlist -------------------------------------------------------------------------
+    def netlist(self, out_path: str | Path, timeout: float = 30.0) -> Path:
+        """Tool > Netlist Compiler, SDF, Logical, whole design, flattened, written to out_path.
+
+        Logical mode keeps unannotated parts (Physical mode drops them).  out_path must not exist: Windows
+        names are case-insensitive and an existing file triggers an overwrite prompt.
+        """
+        out = Path(out_path).resolve()
+        if out.exists():
+            out.unlink()
+        if self.sim_state() != "stopped":
+            raise GuiError("stop the simulation before compiling a netlist")
+        self.show_schematic()
+        self.command(r"^Netlist Compiler")
+        d = self._wait_dialog(lambda d: d["title"] == "Netlist Compiler", 10)
+        for label in ("File(s)", "SDF", "Logical", "Whole Design", "Flatten"):
+            if not _click_button(d["hwnd"], label):
+                raise GuiError(f"Netlist Compiler: no {label!r} option")
+        _click_button(d["hwnd"], "OK")
+        save = self._wait_dialog(lambda d: d["title"].startswith("Compl"), 10)  # Labcenter's own spelling
+        edit = next((c for c, cls, _ in _children(save["hwnd"])
+                     if cls == "Edit" and win32gui.GetDlgCtrlID(c) == 1148), None)
+        if edit is None:
+            raise GuiError("netlist save dialog: file name box not found")
+        win32gui.SendMessage(edit, win32con.WM_SETTEXT, 0, str(out))
+        _click_button(save["hwnd"], "Save")
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            # the output name gets an upper-case .SDF extension; the filesystem does not care
+            if out.exists() and out.stat().st_size > 0 and not self.dialogs():
+                time.sleep(0.3)
+                return out
+            self.handle_dialogs()
+            time.sleep(0.3)
+        raise GuiError(f"netlist was not written to {out}")
+
+    def _wait_dialog(self, pred, timeout: float) -> dict:
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            for d in self.dialogs():
+                if pred(d):
+                    return d
+            time.sleep(0.2)
+        raise GuiError(f"expected dialog did not appear; open dialogs: {self.dialogs()}")
+
+    def debug_window(self, name: str) -> int:
+        """Open a Debug-menu popup (e.g. '8255 Internal Status', 'Registers - U1', 'Memory Contents', 'Virtual
+        Terminal') and return its window handle.  Popups exist only while a simulation is running or paused."""
+        rx = re.compile(re.escape(name), re.I)
+        hits = [m for m in self.menus() if m.path.startswith("Debug/") and rx.search(m.path)]
+        if not hits:
+            avail = [m.path.split("/", 1)[1] for m in self.menus() if m.path.startswith("Debug/")]
+            raise GuiError(f"no Debug menu item matching {name!r}; available: {avail}")
+        win32gui.PostMessage(self.main, win32con.WM_COMMAND, hits[0].command, 0)
+        time.sleep(1.0)
+        title = re.sub(r"^&?\d+\.\s*|&", "", hits[0].path.split("/")[-1])
+        for c, _, t in _children(self.main):
+            if t.replace("&", "") == title:
+                return c
+        for h in _windows(self.pid):
+            if rx.search(win32gui.GetWindowText(h)):
+                return h
+        raise GuiError(f"opened {hits[0].path!r} but could not find its window")
 
     # ----- screenshots and popups ----------------------------------------------------------
     def screenshot(self, title: str | None = None) -> Image.Image:
