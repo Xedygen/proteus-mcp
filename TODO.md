@@ -49,7 +49,7 @@ about the file format), this file.
 - [x] Test: build every solution `main.asm` under `work/x/*/FIRMWARE/*/main.asm`. Record which fail and why.
       The sources were written for MASM32 `ml.exe` (MASM 6); note syntax that MASM 5.10 rejects in
       `docs/QUIRKS.md` so Claude knows what to avoid.
-- [ ] Find out what EXE the 8086 model accepts. Compare a MASM 5.10 EXE with the shipped `Debug.exe` (which
+- [x] Find out what EXE the 8086 model accepts. (MASM 5.10 EXEs load and run; CodeView info only adds source debugging.) Compare a MASM 5.10 EXE with the shipped `Debug.exe` (which
       was linked with CodeView info). Real proof comes in milestone 3.
 
 ## Milestone 2: read a project
@@ -65,12 +65,12 @@ about the file format), this file.
       file (`$PINDEFAULT`, `$PINSHORT`, `$PINBUS` ... with `$MKRORIGIN` / `$MKRNODE`). Needed: for a component
       reference and pin name or number, the pin end coordinates on the sheet after rotation and mirror.
       Cross-check against existing wires: a wire attached to pin N must start or end exactly on that point.
-- [ ] `project.py`: open a `.pdsprj`, list components (ref, device, value, properties, origin), pins with
+- [x] (done as `schematic_components`) `project.py`: open a `.pdsprj`, list components (ref, device, value, properties, origin), pins with
       names, numbers and positions, terminals, wires with labels, junctions.
-- [ ] Netlist: group pins into nets from wire geometry, junctions, wire labels, terminal names and bus
+- [x] (replaced by Proteus's own netlist, `netlist`/`net_of`) Netlist: group pins into nets from wire geometry, junctions, wire labels, terminal names and bus
       labels (`AD[0..15]` expands to `AD0` ... `AD15`). Cross-check against the lab solutions: the 8255 in
       2025 lab5 `mert_guler` must show `PA0..PA7` going to the display and `PB0..PB7` to the buttons.
-- [ ] Decide whether to parse `ROOT.CDB` for anything. It lists pin names per part in plain text and may be
+- [x] Decide whether to parse `ROOT.CDB` for anything. (Read only: Proteus hangs on any rewritten CDB; annotated parts' values/properties come from it.) It lists pin names per part in plain text and may be
       an easier source for pin names than the DSN.
 
 ## Milestone 3: GUI control (can start in parallel with 2)
@@ -95,10 +95,10 @@ about the file format), this file.
       Component dialog must be used. Pick the method that works and document it.
 - [x] Netlist from Proteus itself (Netlist Compiler, logical mode) as the connectivity reference: `netlist`,
       `net_of` tools. This replaces rebuilding nets from DSN geometry for verification.
-- [x] Interaction: press and release a button (sim_click); typing into a Virtual Terminal still open., toggle a switch, set a potentiometer, type into a Virtual
+- [x] Interaction: press and release a button (sim_click), type into Virtual Terminals (terminal_type)., toggle a switch, set a potentiometer, type into a Virtual
       Terminal. Clicking needs sheet coordinate to screen coordinate mapping: derive it from the editing
       window's view (zoom-to-fit, then the known sheet extents), and confirm with a click on a known part.
-- [ ] Commit.
+- [x] Commit.
 
 ## Milestone 4: edit a schematic
 
@@ -115,11 +115,11 @@ Two routes. Try A first; it is deterministic and needs no screen. Fall back to B
       wire, and does the netlist (Tools, Netlist Compiler, or just the simulation) see the connection?
 - [x] Same experiment for `ROOT.CDB`: leave it untouched, then try removing or emptying it, and see which
       Proteus accepts. This decides whether the database must be written too.
-- [ ] Then: a wire stub from a pin with a wire label; a wire onto an existing wire with a junction dot; a
+- [~] (terminals incl. GND/power/named/bus done; junction taps onto existing wires still open) Then: a wire stub from a pin with a wire label; a wire onto an existing wire with a junction dot; a
       ground and a power terminal; a labelled terminal; a bus entry (wire from a pin to a bus with a label).
-- [ ] Change a component property (for example `PROGRAM`, `CLOCK`, the ROM image `FILE` of a 27C128) and a
+- [~] (unannotated parts only; annotated parts need ROOT.CDB, refused) Change a component property (for example `PROGRAM`, `CLOCK`, the ROM image `FILE` of a 27C128) and a
       component value. Rename a terminal or wire label (lab7 asks for the `YA1` to `YA6` labels to be renamed).
-- [ ] Add a component that is already present in the file by cloning its record at a new position with a new
+- [x] (add_part; new device types via schematic_place_devices, needs the mouse) Add a component that is already present in the file by cloning its record at a new position with a new
       reference and identity (a resistor, a NOT gate). For devices not yet in the file the definition must be
       copied from `LIBRARY\*.LIB`; do this only if the labs need it (lab6 and odev2 allow extra logic gates).
 - [ ] Delete a component or a wire.
@@ -128,15 +128,15 @@ Two routes. Try A first; it is deterministic and needs no screen. Fall back to B
 positions, the label tool, the pick-device dialog (`P`), typed dialogs. After every GUI edit, save, re-read
 the file with the milestone 2 reader and confirm the netlist changed as intended.
 
-- [ ] Whichever route: every edit function re-reads the result and returns the before and after nets for the
+- [x] (every edit re-parses its output; netlist/net_of verify in Proteus) Whichever route: every edit function re-reads the result and returns the before and after nets for the
       pins it touched. An edit that does not produce the requested connection is reported as failed.
-- [ ] Commit.
+- [x] Commit.
 
 ## Milestone 5: the MCP server
 
 - [x] `server.py` with the official `mcp` SDK (FastMCP, stdio). Tools return compact JSON; screenshots are
       returned as image content. Tool descriptions say what the tool verifies and what it does not.
-- [ ] Tools (adjust names as the design settles):
+- [x] (see README tool table) Tools (adjust names as the design settles):
       - `proteus_doctor`
       - `project_open(path)` copies into the workspace and returns a handle; `project_save_as`
       - `project_summary`, `component_info(ref)` (pins, positions, nets, properties), `netlist`, `net_of(ref, pin)`
@@ -149,10 +149,10 @@ the file with the milestone 2 reader and confirm the netlist changed as intended
       - `screenshot(target)` for the sheet or a named instrument window; `terminal_read`, `memory_read` if
         text is reachable
       - `lab_read(pdf)` is not needed: Claude reads PDFs itself. Offer `quirks()` returning `docs/QUIRKS.md`.
-- [ ] Config snippets in the README for Claude Code (`claude mcp add` / `.mcp.json`) and Claude Desktop
+- [x] Config snippets in the README for Claude Code (`claude mcp add` / `.mcp.json`) and Claude Desktop
       (`claude_desktop_config.json`), using the venv interpreter and `-X utf8`.
 - [x] Smoke test script: start the server over stdio, list tools, call `proteus_doctor`.
-- [ ] Commit.
+- [x] Commit.
 
 ## Milestone 6: lab acceptance
 
@@ -176,12 +176,30 @@ the passing result in `docs/evidence/`.
 
 ## Milestone 7: wrap up
 
-- [ ] README: replace the planning text with what exists, how to install, how to configure both clients, a
+- [~] README: replace the planning text with what exists, how to install, how to configure both clients, a
       worked example prompt, and a limitations section that separates verified from unverified.
-- [ ] `docs/QUIRKS.md`: model quirks and MASM 5.10 restrictions that Claude must know when writing lab code.
-- [ ] Tests that run without Proteus (parser round-trip, netlist on the samples when `labs/` is present,
+- [x] `docs/QUIRKS.md`: model quirks and MASM 5.10 restrictions that Claude must know when writing lab code.
+- [x] (tests/test_dsn.py, 60 tests) Tests that run without Proteus (parser round-trip, netlist on the samples when `labs/` is present,
       firmware build) under `tests/`.
 - [ ] Final commit.
+
+## Open work (2026-11-15)
+
+- [ ] lab8: decoder, 8259/8251/ADC wiring, interrupt-driven program; clock generators for the 8251 (9600 Hz)
+      and the ADC0804 (no generator in the template; copy one from another project or place via the GUI).
+- [ ] odev2: OR gates for the ROM0x/ROM1x/RAM chip selects must be placed via the GUI (template has only NOT);
+      ROM images are referenced as 00.bin..11.bin relative to the project, copy them next to it.
+- [ ] Junction taps (connect a pin to a wire that is already there) and deleting wires/parts.
+- [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
+- [ ] Read the 35 simulation messages of the first lab5 example run (likely duplicates of known warnings).
+- [ ] 2024 labs as extra cases; one circuit drawn from scratch.
+
+## Waiting for the owner (needs the mouse: background mode off)
+
+- [ ] lab7: look at the scope trace (the scope only draws while visible) and confirm 100 Hz.
+- [ ] odev2: place the OR gates (schematic_place_devices).
+- [ ] lab8: turn the potentiometer between samples (sim_click on its arrows).
+- [ ] lab7 part 2: move the light source towards the LDR.
 
 ## Needs the owner
 
