@@ -191,7 +191,7 @@ _TERMINALS = {
 _ATTRIBUTES = {"$TERDEFAULT": "090000000000", "$TERGROUND": "0d0000000000", "$TERPOWER": "0d0000000000"}
 
 
-def add_terminal(project: str | Path, pin: str, net: str) -> dict:
+def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2) -> dict:
     """Attach a terminal to an unconnected pin ("REF.PIN"): `net` = "GND", "VCC"/"POWER", or any net name
     (pins with terminals of the same name are connected, like wire labels).  The terminal is placed two grid
     steps out from the pin, on the side the pin faces."""
@@ -208,7 +208,7 @@ def add_terminal(project: str | Path, pin: str, net: str) -> dict:
     if kind.encode() + b"\0" not in library and bytes([len(kind)]) + kind.encode() not in library:
         raise dsn.DsnError(f"{kind} is not in this file's embedded library; place one in Proteus first")
     out = p["out"]                                   # the side the pin faces, from the pin record
-    t = [p["xy"][0] + 2 * GRID * out[0], p["xy"][1] + 2 * GRID * out[1]]
+    t = [p["xy"][0] + distance_grid * GRID * out[0], p["xy"][1] + distance_grid * GRID * out[1]]
     if kind == "$TERDEFAULT":
         facing = {(-1, 0): "left", (1, 0): "right", (0, 1): "up", (0, -1): "down"}[tuple(out)]
     else:

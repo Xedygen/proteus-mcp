@@ -27,8 +27,15 @@ Working and tested through a real MCP client (`scripts/smoke_mcp.py`), on this m
 Labcenter's own 8086 sample, so lab results cannot be checked by simulation yet. See `docs/QUIRKS.md` and the
 "Needs the owner" list in `TODO.md`.
 
-Not built yet: adding parts that are not already in the file, bus wires/entries, deleting wires, pressing
-buttons and typing into virtual terminals during a run.
+**Worked example:** `scripts/lab5_example.py` completes the 2025 lab5 template (8255 + 7-segment) entirely
+through the MCP tools: address wiring, eight added series resistors, port A to the display, port B to the
+buttons with pull-ups, a MASM 5.10 program, then 21 connectivity checks against Proteus's own netlist, all
+passing, and the 8086 loading the new program. Because of the install fault this is connectivity-verified,
+not simulation-verified.
+
+Not built yet: placing devices that are not already in the file, editing annotated parts' properties/values
+(ROOT.CDB), bus wires/entries, deleting wires, joining a pin to a wire that is already in place (junctions),
+tidy layout of crowded terminals, pressing buttons and typing into virtual terminals during a run.
 
 ## Install
 
@@ -78,8 +85,9 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
 | `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |
 | `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0` |
+| `schematic_add_part` | Place a copy of an unannotated part already in the design (e.g. a resistor) with its own reference |
 | `schematic_add_terminal` | GND, power or named-net terminal on a pin (`AD0` joins the AD bus line) |
-| `schematic_set_property`, `schematic_set_value` | Edit a part's `{KEY=VALUE}` properties or value text |
+| `schematic_set_property`, `schematic_set_value` | Properties / value of unannotated parts (annotated ones live in ROOT.CDB, refused) |
 
 Example prompt: *"Open labs/2025/lab5/taslak.pdsprj with the proteus tools, read labs/2025/lab5/tanım.pdf, write
 the 8086 program it asks for, build it, run the simulation and show me the result."*

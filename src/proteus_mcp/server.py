@@ -208,14 +208,14 @@ def schematic_add_part(project: str, like: str, x_grid: float, y_grid: float, ro
 
 
 @mcp.tool()
-def schematic_add_terminal(project: str, pin: str, net: str) -> dict:
+def schematic_add_terminal(project: str, pin: str, net: str, distance_grid: int = 2) -> dict:
     """Attach a terminal to an unconnected pin, e.g. pin="U3.RESET", net="GND".
 
     net "GND" places a ground symbol, "VCC"/"POWER" a power symbol; any other name places a named terminal,
     and all pins with terminals (or wire labels / bus members) of the same name are connected, e.g. "AD0"
-    joins the AD0 line of an AD[0..15] bus. Placed two grid steps out on the side the pin faces; refuses a
-    position that would touch another pin or wire."""
-    return schematic.add_terminal(_closed(project), pin, net)
+    joins the AD0 line of an AD[0..15] bus. Placed `distance_grid` steps out on the side the pin faces;
+    refuses a position that would touch another pin or wire."""
+    return schematic.add_terminal(_closed(project), pin, net, distance_grid)
 
 
 @mcp.tool()
