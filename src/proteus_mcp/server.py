@@ -103,7 +103,7 @@ def project_open(path: str, name: str | None = None, overwrite: bool = False) ->
     src = Path(path)
     if not src.is_file():
         raise ValueError(f"not a file: {src}")
-    stem = re.sub(r"[^\w.-]", "_", name or src.stem)
+    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", name or src.stem)  # Proteus 8.6 can fail on non-ASCII paths
     dst = PROJECTS / f"{stem}.pdsprj"
     if not dst.exists() or overwrite:
         PROJECTS.mkdir(parents=True, exist_ok=True)
