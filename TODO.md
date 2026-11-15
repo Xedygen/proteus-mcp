@@ -203,7 +203,9 @@ the passing result in `docs/evidence/`.
       - [x] lab8 (2026-11-16): 116 turns, about 2.3 USD, 7 min. Pot turns gave 03 87 AB BF FF. Fixed from it:
             placement now corrects Proteus's drop offset and redoes parts dropped on wires; sim_start while
             running. Open: Memory Dump only shows its first page; generators absent from the netlist.
-      - [ ] lab6, odev2
+      - [x] lab6 (2026-11-16): 85 turns, about 1.8 USD, 6 min; DEF / NO / DEF (+ UVW) on terminal 2. Fixed from
+            it: wires leave pins before turning and detour round parts; generators listed with frequency.
+      - [ ] odev2
       - Note: the advisor server tool hangs headless sessions; run with --disallowedTools advisor.
 
 ## Review findings still open (Fable review, 2026-11-15)

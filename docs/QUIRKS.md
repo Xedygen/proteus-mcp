@@ -36,6 +36,10 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   in net_of. Confirm clocks from behaviour (e.g. the baud rate works) or with schematic_labels.
 - **Memory Dump** shows only its first page (0000-0107H) in debug_window and cannot be scrolled from the tools,
   so the interrupt vector table at 0:0144H is not readable that way.
+- **74HC4078** (8-input gate): the Proteus symbol looks like an OR gate, but its Y output simulates as NOR.
+  Check the polarity with the live logic levels (screenshot_part) before relying on it.
+- **8251 framing error:** the log shows `[RECV/SEND] Framing error detected!` once on the first typed character
+  of every run; the data still arrives correctly.
 - **Virtual Terminal:** raw bytes show as characters; `terminal_mode("Hex Display Mode")` switches to hex.
 - **8086 model:** internal memory 0x00000-0x0FFFF (DBG_MEM_SIZE); the program loads at 0800:0000, so the
   interrupt vector table at 0000:0000 is writable RAM. Keep a stack inside your own segment.

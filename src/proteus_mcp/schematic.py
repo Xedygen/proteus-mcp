@@ -73,6 +73,43 @@ def _route(a: list[int], b: list[int], via_x: int | None = None) -> list[list[in
     return [p for i, p in enumerate(pts) if i == 0 or p != pts[i - 1]]
 
 
+def _simplify(pts: list[list[int]]) -> list[list[int]]:
+    """Drop repeated points and the middle point of three in a line that keeps going the same way.  A path
+    that doubles back on itself is refused: it would run over the part it came from."""
+    out: list[list[int]] = []
+    for q in pts:
+        if out and q == out[-1]:
+            continue
+        if len(out) >= 2:
+            a, b = out[-2], out[-1]
+            if a[0] == b[0] == q[0] or a[1] == b[1] == q[1]:
+                if (b[0] - a[0]) * (q[0] - b[0]) < 0 or (b[1] - a[1]) * (q[1] - b[1]) < 0:
+                    raise dsn.DsnError("route would double back on itself")
+                out[-1] = q
+                continue
+        out.append(q)
+    return out
+
+
+def _route_pins(pa: dict, pb: dict, via_x: int | None = None, via_y: int | None = None) -> list[list[int]]:
+    """Path between two pins that first leaves each pin one grid step in the direction it faces (so it never
+    runs back through its own part), then joins the two stub ends: through column via_x (horizontal,
+    vertical, horizontal), or, with via_y, along row via_y (a detour above or below parts)."""
+    a, b = pa["xy"], pb["xy"]
+    oa, ob = pa.get("out", (0, 0)), pb.get("out", (0, 0))
+    facing_h = a[1] == b[1] and oa[0] and ob[0] and (b[0] - a[0]) * oa[0] > 0 and (a[0] - b[0]) * ob[0] > 0
+    facing_v = a[0] == b[0] and oa[1] and ob[1] and (b[1] - a[1]) * oa[1] > 0 and (a[1] - b[1]) * ob[1] > 0
+    if facing_h or facing_v:
+        return [a, b]                    # facing each other on one line: straight wire
+    sa = [a[0] + oa[0] * GRID, a[1] + oa[1] * GRID]
+    sb = [b[0] + ob[0] * GRID, b[1] + ob[1] * GRID]
+    if via_y is not None:
+        core = [sa, [sa[0], via_y], [sb[0], via_y], sb]
+    else:
+        core = _route(sa, sb, via_x)
+    return _simplify([a] + core + [b])
+
+
 def _hot_spots(sheet: dsn.Sheet) -> set[tuple[int, int]]:
     """Points where something can connect: every pin end, wire end and junction."""
     spots = set()
@@ -148,23 +185,38 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
         raise dsn.DsnError("no existing wire to copy the wire style from")
     key = sheet.new_key()
     if via_x_grid is not None:
-        points = _route(pa["xy"], pb["xy"], round(via_x_grid * GRID))
+        points = _route_pins(pa, pb, round(via_x_grid * GRID))
         _check_clear(sheet, points, [pa["xy"], pb["xy"]])
     else:
         mid = round((pa["xy"][0] + pb["xy"][0]) / 2 / GRID)
         lo, hi = sorted((pa["xy"][0] // GRID, pb["xy"][0] // GRID))
-        candidates = sorted(range(lo + 1, hi), key=lambda x: abs(x - mid)) or [mid]
+        # columns between the pins first, then further out (a route may go round a part)
+        candidates = sorted(range(lo - 10, hi + 11), key=lambda x: (not lo < x < hi, abs(x - mid)))
         points, last = None, None
         for x in candidates:
             try:
-                trial = _route(pa["xy"], pb["xy"], x * GRID)
+                trial = _route_pins(pa, pb, x * GRID)
                 _check_clear(sheet, trial, [pa["xy"], pb["xy"]])
                 points = trial
                 break
             except dsn.DsnError as e:
                 last = e
         if points is None:
-            raise dsn.DsnError(f"no free column between the pins ({last}); pass via_x_grid")
+            # no column works (e.g. the target lies behind the part): detour along a row above or below
+            base = max(pa["xy"][1], pb["xy"][1]), min(pa["xy"][1], pb["xy"][1])
+            for k in range(2, 12):
+                for y in (base[0] + k * GRID, base[1] - k * GRID):
+                    try:
+                        trial = _route_pins(pa, pb, via_y=y)
+                        _check_clear(sheet, trial, [pa["xy"], pb["xy"]])
+                        points = trial
+                        break
+                    except dsn.DsnError as e:
+                        last = e
+                if points is not None:
+                    break
+        if points is None:
+            raise dsn.DsnError(f"no free route between the pins ({last}); pass via_x_grid or use terminals")
     # ISIS binds points[0] to the end of whichever object is serialised first (4651/4651 sample wires)
     order = {id(o): i for i, o in enumerate(sheet.objects)}
     first_a = (order[id(ca)], pa["slot"]) <= (order[id(cb)], pb["slot"])
@@ -449,6 +501,13 @@ def labels(project: str | Path) -> dict:
                 e = out.setdefault(lab["text"], {"terminals": 0, "wire_labels": 0, "pins": []})
                 e["wire_labels"] += 1
                 e["pins"] += owner.get(o["start"], [])
+    for o in sheet.objects:                      # clock / DC generators: their name labels their net
+        if o["type"] == "instrument" and o["id"].startswith("M"):
+            props = dict(re.findall(r"\{([^=}]+)=([^}]*)\}", o["props"].decode("latin-1")))
+            e = out.setdefault(o["labels"][0]["text"] or o["device"], {"terminals": 0, "wire_labels": 0, "pins": []})
+            e["generator"] = {"device": o["device"], **{k: v for k, v in props.items()
+                                                        if k in ("CLOCK", "VALUE", "INIT", "START")}}
+            e["pins"] += owner.get(o["pointers"][0], [])
     return dict(sorted(out.items()))
 
 

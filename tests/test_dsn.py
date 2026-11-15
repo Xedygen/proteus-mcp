@@ -153,3 +153,15 @@ def test_check_reports_lonely_terminal(tmp_path):
     r = schematic.check(proj)
     assert any(x["name"] == "TYPO_NET" for x in r["single_use_names"])
     assert "PC1" in r["unconnected_pins"]["U3"]
+
+
+LAB6 = REPO / "labs" / "2025" / "lab6" / "taslak.pdsprj"
+
+
+@pytest.mark.skipif(not LAB6.exists(), reason="labs/ not present")
+def test_route_goes_round_its_own_part(tmp_path):
+    from proteus_mcp import pdsprj, schematic
+    proj = pdsprj.copy(LAB6, tmp_path / "t.pdsprj")
+    n = schematic.add_part(proj, "U5", 10, 0)["part"]          # a NOT gate: Q on the right, D on the left
+    pts = schematic.connect(proj, f"{n}.Q", f"{n}.D")["points_grid"]
+    assert len(pts) > 2 and any(p[1] != 0 for p in pts)         # not a straight line through the gate
