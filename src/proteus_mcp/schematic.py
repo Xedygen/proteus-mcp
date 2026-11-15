@@ -11,7 +11,7 @@ import re
 import struct
 from pathlib import Path
 
-from . import dsn, pdsprj
+from . import cdb, dsn, pdsprj
 from .devices import find_pin, pins
 
 GRID = dsn.GRID
@@ -21,10 +21,22 @@ def load(project: str | Path) -> dsn.Sheet:
     return dsn.parse(pdsprj.entries(project)["ROOT.DSN"])
 
 
-def save(project: str | Path, sheet: dsn.Sheet) -> None:
+def save(project: str | Path, sheet: dsn.Sheet, cdb_bytes: bytes | None = None) -> None:
     out = sheet.build()
     dsn.parse(out)  # must still parse, with every pointer on a wire
-    pdsprj.replace(project, {"ROOT.DSN": out})
+    changes = {"ROOT.DSN": out}
+    if cdb_bytes is not None:
+        changes["ROOT.CDB"] = cdb_bytes
+    pdsprj.replace(project, changes)
+
+
+def _in_cdb(project, comp: dict) -> bool:
+    """Annotated parts also have a record in ROOT.CDB, and Proteus takes their properties from there.
+    ROOT.CDB cannot be rewritten yet: any change, even of equal length, makes Proteus hang at
+    "Initializing project..." (seen 2026-11-15), so such edits are refused instead of silently ignored."""
+    data = pdsprj.entries(project).get("ROOT.CDB")
+    ref = comp["labels"][0]["text"]
+    return bool(data and ref and cdb.read_part(data, ref, comp["device"]))
 
 
 def _props_dict(text: str) -> dict[str, str]:
@@ -44,7 +56,8 @@ def components(project: str | Path, with_pins: bool = True) -> list[dict]:
         if with_pins:
             try:
                 item["pins"] = [{"name": q["name"], "number": q["number"], "connected": q["connected"],
-                                 "grid": [q["xy"][0] / GRID, q["xy"][1] / GRID]} for q in pins(sheet, c)]
+                                 "grid": [q["xy"][0] / GRID, q["xy"][1] / GRID]}
+                                for q in pins(sheet, c) if not q["hidden"]]
             except dsn.DsnError as e:
                 item["pins_error"] = str(e)
         out.append(item)
@@ -65,7 +78,7 @@ def _hot_spots(sheet: dsn.Sheet) -> set[tuple[int, int]]:
     spots = set()
     for c in sheet.components():
         try:
-            spots |= {tuple(p["xy"]) for p in pins(sheet, c)}
+            spots |= {tuple(p["xy"]) for p in pins(sheet, c) if not p["hidden"]}
         except dsn.DsnError:
             pass
     for w in sheet.wires():
@@ -83,6 +96,17 @@ def _on_segment(p, a, b) -> bool:
     return False
 
 
+def _overlaps(a, b, c, d) -> bool:
+    """Do segments ab and cd run along each other for more than a point?"""
+    if a[0] == b[0] == c[0] == d[0]:
+        lo, hi = max(min(a[1], b[1]), min(c[1], d[1])), min(max(a[1], b[1]), max(c[1], d[1]))
+        return hi > lo
+    if a[1] == b[1] == c[1] == d[1]:
+        lo, hi = max(min(a[0], b[0]), min(c[0], d[0])), min(max(a[0], b[0]), max(c[0], d[0]))
+        return hi > lo
+    return False
+
+
 def _check_clear(sheet: dsn.Sheet, points: list[list[int]], allowed: list[list[int]]) -> None:
     """Refuse a new wire that would touch any existing connection point other than its own pins: in Proteus
     that looks like (and after any later edit becomes) a real connection."""
@@ -93,6 +117,12 @@ def _check_clear(sheet: dsn.Sheet, points: list[list[int]], allowed: list[list[i
                 raise dsn.DsnError(f"route {[[q / GRID for q in p] for p in points]} touches an existing "
                                    f"connection point at {[spot[0] / GRID, spot[1] / GRID]}; "
                                    "choose another via_x_grid or connect differently")
+    for w in sheet.wires():
+        for c, d in zip(w["points"], w["points"][1:]):
+            for a, b in zip(points, points[1:]):
+                if _overlaps(a, b, c, d):
+                    raise dsn.DsnError(f"route {[[q / GRID for q in p] for p in points]} runs along an existing "
+                                       f"wire near {[c[0] / GRID, c[1] / GRID]}; choose another via_x_grid")
 
 
 def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None) -> dict:
@@ -108,13 +138,35 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
             raise dsn.DsnError(f"{label} already has a wire; Proteus allows one wire per pin end")
         if pin["bus"]:
             raise dsn.DsnError(f"{label} is a bus pin; bus connections are not supported yet")
+        if pin["hidden"]:
+            raise dsn.DsnError(f"{label} is a hidden power pin; Proteus connects it to its power net itself")
     template = next((w for w in sheet.wires() if w["flags"] == 0), None)
     if template is None:
         raise dsn.DsnError("no existing wire to copy the wire style from")
     key = sheet.new_key()
-    via = None if via_x_grid is None else round(via_x_grid * GRID)
-    points = _route(pa["xy"], pb["xy"], via)
-    _check_clear(sheet, points, [pa["xy"], pb["xy"]])
+    if via_x_grid is not None:
+        points = _route(pa["xy"], pb["xy"], round(via_x_grid * GRID))
+        _check_clear(sheet, points, [pa["xy"], pb["xy"]])
+    else:
+        mid = round((pa["xy"][0] + pb["xy"][0]) / 2 / GRID)
+        lo, hi = sorted((pa["xy"][0] // GRID, pb["xy"][0] // GRID))
+        candidates = sorted(range(lo + 1, hi), key=lambda x: abs(x - mid)) or [mid]
+        points, last = None, None
+        for x in candidates:
+            try:
+                trial = _route(pa["xy"], pb["xy"], x * GRID)
+                _check_clear(sheet, trial, [pa["xy"], pb["xy"]])
+                points = trial
+                break
+            except dsn.DsnError as e:
+                last = e
+        if points is None:
+            raise dsn.DsnError(f"no free column between the pins ({last}); pass via_x_grid")
+    # ISIS binds points[0] to the end of whichever object is serialised first (4651/4651 sample wires)
+    order = {id(o): i for i, o in enumerate(sheet.objects)}
+    first_a = (order[id(ca)], pa["slot"]) <= (order[id(cb)], pb["slot"])
+    if not first_a:
+        points = points[::-1]
     sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": template["style"],
                           "labels": [], "points": points})
     ca["pointers"][pa["slot"]] = key
@@ -148,6 +200,8 @@ def add_terminal(project: str | Path, pin: str, net: str) -> dict:
     comp, p = find_pin(sheet, ref, pin_name)
     if p["connected"]:
         raise dsn.DsnError(f"{pin} already has a wire")
+    if p["hidden"]:
+        raise dsn.DsnError(f"{pin} is a hidden power pin")
     kind = {"GND": "$TERGROUND", "VCC": "$TERPOWER", "POWER": "$TERPOWER", "VDD": "$TERPOWER"}.get(
         net.upper(), "$TERDEFAULT")
     library = sheet.data[:sheet.circuit]
@@ -184,6 +238,9 @@ def set_property(project: str | Path, ref: str, key: str, value: str) -> dict:
     """Set {KEY=VALUE} in a component's property text (added if missing)."""
     sheet = load(project)
     comp = sheet.component(ref)
+    if _in_cdb(project, comp):
+        raise dsn.DsnError(f"{ref} is an annotated part whose properties Proteus reads from ROOT.CDB, which this "
+                           "tool cannot rewrite yet; change it in Proteus (Edit Component) instead")
     text = comp["props"].decode("latin-1")
     pat = re.compile(r"\{" + re.escape(key) + r"=[^}]*\}")
     new = f"{{{key}={value}}}"
@@ -207,6 +264,9 @@ def set_value(project: str | Path, ref: str, value: str) -> dict:
     """Change the value text shown under a component (e.g. a resistor's 10k)."""
     sheet = load(project)
     comp = sheet.component(ref)
+    if _in_cdb(project, comp):
+        raise dsn.DsnError(f"{ref} is an annotated part whose value Proteus reads from ROOT.CDB, which this "
+                           "tool cannot rewrite yet; change it in Proteus (Edit Component) instead")
     comp["labels"][1]["text"] = value
     save(project, sheet)
     return {"ref": ref, "value": value}

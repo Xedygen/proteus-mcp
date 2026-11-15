@@ -64,6 +64,17 @@ sample projects shows output, no lab result can be verified by simulation on thi
 - **Debug popups** (Registers, Memory Dump, 8255 Internal Status, Source Code, Watch Window) open from the
   Debug menu while paused and can be captured.
 
+## Schematic edits (verified 2026-11-15)
+
+- Wires and terminals written into ROOT.DSN are accepted by Proteus without touching ROOT.CDB.
+- Annotated parts (U1, U2 ...) also have a record in ROOT.CDB, and Proteus takes their **properties and value**
+  from there: the same change made only in ROOT.DSN is ignored (8086 CLOCK, 74HC373 value).
+- Any rewrite of ROOT.CDB, even one that keeps every length, makes Proteus hang at "Initializing project..."
+  on the splash screen. So property/value edits of annotated parts are refused by the tools; unannotated parts
+  (resistors, buttons) can be changed (verified: a resistor's value).
+- Proteus 8.6 may refuse to open project paths with non-ASCII characters (`tasarım.pdsprj`); project_open
+  copies to an ASCII name in the workspace.
+
 ## Firmware build (MASM 5.10 through DOSBox)
 
 The MCP assembles with MASM 5.10 and links with LINK 3.60, not with MASM32 `ml.exe` as the lab templates

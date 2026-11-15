@@ -89,7 +89,9 @@ def pins(sheet: Sheet, component: dict) -> list[dict]:
         d = transform(transform([-1, 0], pin["angle"], pin["mirror"]), angle, mirror)
         out.append({"slot": slot, "name": pin["name"], "number": pin["number"], "glyph": pin["glyph"],
                     "xy": [component["origin"][0] + v[0], component["origin"][1] + v[1]],
-                    "out": d, "connected": bool(ptr), "bus": pin["glyph"] == "$PINBUS"})
+                    "out": d, "connected": bool(ptr), "bus": pin["glyph"] == "$PINBUS",
+                    # hidden power pins (VCC/GND of logic parts): flag byte 1 has no 0x02 bit
+                    "hidden": not (int(pin["flags"][2:4], 16) & 2)})
     return out
 
 

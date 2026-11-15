@@ -210,13 +210,17 @@ def schematic_add_terminal(project: str, pin: str, net: str) -> dict:
 
 @mcp.tool()
 def schematic_set_property(project: str, ref: str, key: str, value: str) -> dict:
-    """Set a component property such as CLOCK (8086), or the ROM image file of a 27C128."""
+    """Set a {KEY=VALUE} property of an UNANNOTATED part (e.g. RES#0010, BUTTON#0007).
+
+    Annotated parts (U1, U2 ...) are refused: Proteus reads their properties from ROOT.CDB, which cannot be
+    rewritten yet (Proteus hangs on a modified CDB). Change those in Proteus's Edit Component dialog."""
     return schematic.set_property(_closed(project), ref, key, value)
 
 
 @mcp.tool()
 def schematic_set_value(project: str, ref: str, value: str) -> dict:
-    """Change a component's value text (e.g. a resistor's 10k)."""
+    """Change the value of an UNANNOTATED part, e.g. a resistor RES#0010 to 330 (verified in Proteus).
+    Annotated parts (U1 ...) are refused for the same ROOT.CDB reason as schematic_set_property."""
     return schematic.set_value(_closed(project), ref, value)
 
 

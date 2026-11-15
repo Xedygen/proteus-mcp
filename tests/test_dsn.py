@@ -87,3 +87,17 @@ def test_terminals_face_outwards_and_stay_clear(tmp_path):
     assert r["terminal_grid"][0] > 27
     names = [o["label"]["text"] for o in schematic.load(proj).objects if o["type"] == "terminal"]
     assert "NETX" in names
+
+
+@pytest.mark.skipif(not LAB5.exists(), reason="labs/ not present")
+def test_new_wire_starts_at_first_serialised_end(tmp_path):
+    """ISIS binds points[0] to the object written first; argument order must not matter."""
+    from proteus_mcp import devices, pdsprj, schematic
+    proj = pdsprj.copy(LAB5, tmp_path / "t.pdsprj")
+    schematic.connect(proj, "U3.A0", "U2.Q1")               # U2 is written before U3
+    sheet = schematic.load(proj)
+    _, q1 = devices.find_pin(sheet, "U2", "Q1")
+    wire = next(w for w in sheet.wires() if q1["xy"] in (w["points"][0], w["points"][-1]))
+    assert wire["points"][0] == q1["xy"]
+    with pytest.raises(dsn.DsnError):
+        schematic.connect(proj, "U2.VCC", "U3.PC7")          # hidden power pin
