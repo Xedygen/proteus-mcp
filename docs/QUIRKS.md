@@ -40,6 +40,7 @@ reaches the bus peripherals:
 | Pin animation during the run | 8086 RESET low, READY high; latch outputs feeding 8255 A0/A1 stay undefined (grey), as if no bus cycle ever happens. |
 | 2025 lab7, `mert_guler` solution (74273 latches, 74154, DAC0830) | Scope shows no trace. |
 | Labcenter's own `SAMPLES\VSM for 8086\8086 Demo Board` | Same: 8255 stays at `9B`, the Virtual Terminal stays empty. |
+| Labcenter's `SAMPLES\Interactive Simulation\Animated Circuits\TTLClock` (TTL logic only, no CPU) | Works: display lit (`0:00`), counter pins animate. So digital simulation and the 7-segment model are fine; the fault is specific to the 8086 driving its bus. |
 
 All install files are dated February 2017 (PDS.EXE March 2017, SP2), so this is not an obvious mix of
 versions. The 74HC373 model is present in `MODELS\DIGITAL.LML`. Not yet done: the owner opening a project by
