@@ -133,6 +133,8 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
     rb, pb_name = b.split(".", 1)
     ca, pa = find_pin(sheet, ra, pa_name)
     cb, pb = find_pin(sheet, rb, pb_name)
+    if pa is pb:
+        raise dsn.DsnError(f"{a} and {b} are the same pin")
     for comp, pin, label in ((ca, pa, a), (cb, pb, b)):
         if pin["connected"]:
             raise dsn.DsnError(f"{label} already has a wire; Proteus allows one wire per pin end")
@@ -173,7 +175,8 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
     cb["pointers"][pb["slot"]] = key
     sheet.reschedule()
     save(project, sheet)
-    return {"connected": [a, b], "points_grid": [[p[0] / GRID, p[1] / GRID] for p in points]}
+    return {"connected": [a, b], "resolved": [f"{x['name']} (pin {x['number'] or '?'})" for x in (pa, pb)],
+            "points_grid": [[p[0] / GRID, p[1] / GRID] for p in points]}
 
 
 # Terminal geometry measured on the samples (all terminals with a wire): connection point relative to the
@@ -250,7 +253,9 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     comp["pointers"][p["slot"]] = key
     sheet.reschedule()
     save(project, sheet)
-    return {"pin": pin, "terminal": kind, "net": net, "terminal_grid": [t[0] / GRID, t[1] / GRID]}
+    # echo what the pin resolved to: names win over numbers, so on a 74154 "5" is output Y5 (pin 6)
+    return {"pin": pin, "resolved": f"{p['name']} (pin {p['number'] or '?'})", "terminal": kind, "net": net,
+            "terminal_grid": [t[0] / GRID, t[1] / GRID]}
 
 
 def _num(x: float) -> str:
