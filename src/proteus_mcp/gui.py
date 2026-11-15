@@ -264,7 +264,14 @@ class Session:
         """File > Exit.  A save prompt is answered 'No' only if it is the standard save question."""
         if not self.alive():
             return {"closed": True}
-        self.command(r"^E&xit Application")
+        # the main window can be re-created (seen after Save As), so look it up again
+        mains = [h for h in _windows(self.pid) if win32gui.GetClassName(h).startswith("LX_APPLN")]
+        if mains:
+            self.main = mains[0]
+        try:
+            self.command(r"^E&xit Application")
+        except GuiError:
+            win32gui.PostMessage(self.main, win32con.WM_CLOSE, 0, 0)
         t0 = time.monotonic()
         while time.monotonic() - t0 < timeout:
             if not self.alive():
@@ -573,3 +580,64 @@ class Session:
             win32api.SetCursorPos((l + 40, t + 10))       # title bar: off the drawing
         finally:
             win32gui.SetWindowPos(self.main, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, flags)
+
+    def place_device(self, device: str, frame, size, xy, timeout: float = 10.0) -> None:
+        """Library > Pick parts: search `device`, pick the exact match, and place it at sheet point `xy`
+        (two clicks: the first attaches the outline to the cursor, the second drops it)."""
+        import warnings
+        self.show_schematic()
+        self.command(r"^Pick parts from libraries")
+        d = self._wait_dialog(lambda d: d["title"] == "Pick Devices", timeout)["hwnd"]
+        kids = _children(d)
+        edit = next(c for c, cls, _ in kids if cls == "Edit")
+        lv = next(c for c, cls, _ in kids if cls == "SysListView32")
+        win32gui.SendMessage(edit, win32con.WM_SETTEXT, 0, device)
+        time.sleep(1.5)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from pywinauto.controls.common_controls import ListViewWrapper
+            from pywinauto.controls.hwndwrapper import HwndWrapper
+            lw = ListViewWrapper(HwndWrapper(lv).element_info)
+            names = [lw.get_item(i, 0).text() for i in range(lw.item_count())]
+            hits = [i for i, n in enumerate(names) if n.upper() == device.upper()]
+            if not hits:
+                _click_button(d, "Cancel")
+                raise GuiError(f"device {device!r} not found in the libraries; close matches: {names[:10]}")
+            lw.get_item(hits[0]).select()
+        time.sleep(0.3)
+        _click_button(d, "OK")
+        time.sleep(1.0)
+        self.handle_dialogs()
+        x, y = self.sheet_to_screen(frame, size, xy)
+        self.real_click(x, y, hold=0.1)
+        time.sleep(0.6)
+        self.real_click(x, y, hold=0.1)
+        time.sleep(0.8)
+        self.handle_dialogs()
+
+    def save(self, timeout: float = 30.0) -> None:
+        """File > Save Project.  Proteus answers with a Save As dialog for projects it opened from a lab
+        file; that dialog gets this project's own path, and the overwrite question is answered Yes."""
+        before = self.project.stat().st_mtime
+        self.command(r"^Save Project")
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            for d in self.dialogs():
+                if d["title"] == "Save Proteus Project File":
+                    edit = next((c for c, cls, _ in _children(d["hwnd"])
+                                 if cls == "Edit" and win32gui.GetDlgCtrlID(c) == 1148), None)
+                    if edit is None:
+                        raise GuiError("Save As dialog: file name box not found")
+                    win32gui.SendMessage(edit, win32con.WM_SETTEXT, 0, str(self.project))
+                    _click_button(d["hwnd"], "Save")
+                    time.sleep(0.8)
+                elif re.search(r"already exists|replace", " ".join(d["texts"]), re.I) and "Yes" in d["buttons"]:
+                    _click_button(d["hwnd"], "Yes")
+                    time.sleep(0.5)
+                else:
+                    self.handle_dialogs()
+            if self.project.stat().st_mtime != before and not self.dialogs():
+                time.sleep(0.8)
+                return
+            time.sleep(0.3)
+        raise GuiError(f"project file did not change after Save Project; dialogs: {self.dialogs()}")

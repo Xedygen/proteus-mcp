@@ -209,6 +209,38 @@ def schematic_add_part(project: str, like: str, x_grid: float, y_grid: float, ro
 
 
 @mcp.tool()
+def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
+    """Place NEW device types from Proteus's libraries (e.g. a 74HC4078 or 4002 gate the template lacks).
+
+    `devices` is a list of {"device": "74HC4078", "x_grid": 0, "y_grid": -30}. Proteus is launched on the
+    project, each device is picked in the Pick Devices dialog and dropped near the given point, the project is
+    saved by Proteus (so ROOT.CDB stays consistent) and Proteus is closed. Returns the new parts with their
+    actual reference, position and pins (positions land a few grid steps from the request; wire with the
+    returned pin positions). Multi-gate packages appear per gate, e.g. U9:A."""
+    global _session
+    p = _closed(project)
+    if _session is not None and _session.alive():
+        raise ValueError(f"Proteus is running on {_session.project.stem}; call proteus_close first")
+    before = {c["ref"] for c in schematic.components(p, with_pins=False)}
+    sheet = schematic.load(p)
+    size = sheet.size()
+    s = gui.Session.launch(p)
+    try:
+        for d in devices:
+            frame = s.sheet_frame()
+            s.place_device(d["device"], frame, size,
+                           (round(float(d["x_grid"]) * schematic.GRID), round(float(d["y_grid"]) * schematic.GRID)))
+        s.save()
+    finally:
+        if s.alive():
+            try:
+                s.close()
+            except gui.GuiError:
+                s.kill()   # only ever this server's own Proteus process
+    return [c for c in schematic.components(p) if c["ref"] not in before]
+
+
+@mcp.tool()
 def schematic_add_terminal(project: str, pin: str, net: str, distance_grid: int = 2) -> dict:
     """Attach a terminal to an unconnected pin, e.g. pin="U3.RESET", net="GND".
 
