@@ -636,7 +636,13 @@ class Session:
                 except Exception:
                     pass
             time.sleep(0.2)
-            under = win32gui.WindowFromPoint((x, y))
+            # transient system overlays (the Alt-key "Task Switching" strip, tooltips) go away by themselves
+            for _ in range(10):
+                under = win32gui.WindowFromPoint((x, y))
+                if win32process.GetWindowThreadProcessId(under)[1] == self.pid:
+                    break
+                win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)   # release a stuck Alt
+                time.sleep(0.5)
             if win32process.GetWindowThreadProcessId(under)[1] != self.pid:
                 raise GuiError(f"another window ({win32gui.GetWindowText(win32gui.GetAncestor(under, 2))!r}) "
                                "covers the click point; not clicking")
@@ -677,7 +683,12 @@ class Session:
             from pywinauto.controls.common_controls import ListViewWrapper
             from pywinauto.controls.hwndwrapper import HwndWrapper
             lw = ListViewWrapper(HwndWrapper(lv).element_info)
-            names = [lw.get_item(i, 0).text() for i in range(lw.item_count())]
+            names = []
+            for i in range(lw.item_count()):
+                try:
+                    names.append(lw.get_item(i, 0).text())
+                except (UnicodeDecodeError, OSError):   # some library entries are not valid UTF-8
+                    names.append("")
             hits = [i for i, n in enumerate(names) if n.upper() == device.upper()]
             if not hits:
                 _click_button(d, "Cancel")

@@ -46,9 +46,13 @@ static POT with an interactive POT-HG, builds the 74154 decoder, wires 8259, 825
 terminal, switched to Hex Display Mode by the tool, shows the samples; turning the pot changes them
 (e.g. 80 -> 66 -> 99, `docs/evidence/lab8_pot_terminal.png`).
 
+`scripts/odev2_example.py` does odev2 (64 KB ROM at 20000H, 64 KB RAM at 60000H): two 74LS138 bank decoders
+(even on A0, odd on /BHE), an OR gate placed from the library plus three copies and a NOT for the A15 split,
+all ROM/RAM address, data and control lines, the ROM images copied with the project, and a program calling
+the two FAR routines. Paused, RAM00 shows 34 / CD and RAM01 12 / AB (`docs/evidence/odev2_ram.png`).
+
 Not built yet: editing annotated parts' properties/values (ROOT.CDB), moving parts that already have wires,
-joining a pin to a wire that is already in place (junctions), tidy layout of crowded terminals, odev2 ROM
-images.
+joining a pin to a wire that is already in place (junctions), tidy layout of crowded terminals.
 
 ## Install
 

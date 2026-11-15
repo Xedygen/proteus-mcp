@@ -177,11 +177,15 @@ def project_open(path: str, name: str | None = None, overwrite: bool = False) ->
     if reused and origin.exists() and origin.read_text(encoding="utf-8") != str(src.resolve()):
         raise ValueError(f"workspace project {stem} is a copy of {origin.read_text(encoding='utf-8')}; pass "
                          "another name or overwrite=True")
+    copied = []
     if not reused:
         PROJECTS.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dst)
         origin.write_text(str(src.resolve()), encoding="utf-8")
-    return project_info(stem) | {"source": str(src.resolve()), "reused": reused}
+        for f in pdsprj.referenced_files(src):       # e.g. ROM images named in FILE properties
+            shutil.copyfile(f, PROJECTS / f.name)
+            copied.append(f.name)
+    return project_info(stem) | {"source": str(src.resolve()), "reused": reused, "files_copied": copied}
 
 
 @mcp.tool()
@@ -199,14 +203,19 @@ def project_info(project: str) -> dict:
 
 @mcp.tool()
 def project_export(project: str, dest: str) -> dict:
-    """Copy a workspace project to `dest` (a .pdsprj path), e.g. OgrenciNo_IsimSoyisim.pdsprj for handing in."""
+    """Copy a workspace project to `dest` (a .pdsprj path), e.g. OgrenciNo_IsimSoyisim.pdsprj for handing in.
+    Files the project refers to by relative name (ROM images such as 00.bin) are copied next to it."""
     p = _project(project)
     d = Path(dest)
     if d.suffix.lower() != ".pdsprj":
         raise ValueError("dest must end with .pdsprj")
     d.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(p, d)
-    return {"exported": str(d.resolve()), "bytes": d.stat().st_size}
+    extra = []
+    for f in pdsprj.referenced_files(p):                 # ROM images etc. must sit next to the project
+        shutil.copyfile(f, d.parent / f.name)
+        extra.append(f.name)
+    return {"exported": str(d.resolve()), "bytes": d.stat().st_size, "files_copied": extra}
 
 
 # ----- firmware ----------------------------------------------------------------------------------

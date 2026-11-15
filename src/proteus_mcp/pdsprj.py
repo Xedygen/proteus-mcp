@@ -58,3 +58,15 @@ def firmware_paths(files: dict[str, bytes]) -> tuple[str, str] | None:
     if not name:
         return None
     return f"FIRMWARE/{name}/main.asm", f"FIRMWARE/{name}/Debug/Debug.exe"
+
+
+def referenced_files(project: str | Path) -> list[Path]:
+    """Files next to the project that its parts refer to by relative name, e.g. ROM images in a 27C128's
+    FILE property (00.bin).  Proteus resolves those against the project's folder, so they travel with it."""
+    project = Path(project)
+    blob = b"".join(v for k, v in entries(project).items() if k.upper().endswith((".DSN", ".CDB")))
+    out = []
+    for f in sorted(project.parent.iterdir()):
+        if f.is_file() and f.suffix.lower() not in (".pdsprj", ".pdf", ".workspace", ".sdf", ".source")                 and f.name.encode() in blob:
+            out.append(f)
+    return out
