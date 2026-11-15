@@ -54,14 +54,14 @@ about the file format), this file.
 
 ## Milestone 2: read a project
 
-- [ ] Finish the `ROOT.DSN` object walker (`scripts/probe_dsn.py` is the starting point, `docs/FORMAT.md` the
+- [x] Finish the `ROOT.DSN` object walker (`scripts/probe_dsn.py` is the starting point, `docs/FORMAT.md` the
       notes). Target: all 22 samples walk to the 0xFF terminator with zero unknown records. Method: when a
       file stops, hex-dump around the record *before* the stop and compare with the same construct in a file
       that parses. Template and solution pairs differ by only a few objects, which isolates new record types.
       The Proteus 9 reader in `chen0416ccc-cpu/Proteus-MCP` (`proteus_mcp/native9.py`, MIT, attribution
       required if code is reused) describes the sibling format.
-- [ ] Round-trip test: parse then re-serialise every sample and compare bytes. Must be identical.
-- [ ] Decode pin positions. Each component's pins come from the device definition embedded earlier in the
+- [x] Round-trip test: parse then re-serialise every sample and compare bytes. Must be identical.
+- [x] Decode pin positions. Each component's pins come from the device definition embedded earlier in the
       file (`$PINDEFAULT`, `$PINSHORT`, `$PINBUS` ... with `$MKRORIGIN` / `$MKRNODE`). Needed: for a component
       reference and pin name or number, the pin end coordinates on the sheet after rotation and mirror.
       Cross-check against existing wires: a wire attached to pin N must start or end exactly on that point.
@@ -102,14 +102,18 @@ about the file format), this file.
 
 ## Milestone 4: edit a schematic
 
+Status 2026-11-15: Route A works. All 27 samples parse and rebuild byte for byte; pin positions verified on
+3213 pins; wires and terminals written into the lab5 template are accepted by Proteus and appear in its
+netlist; ROOT.CDB can stay untouched. Still open below: bus entries, cloning/adding parts, deleting.
+
 Two routes. Try A first; it is deterministic and needs no screen. Fall back to B for whatever A cannot do.
 
 **Route A: write `ROOT.DSN` directly.**
 
-- [ ] Smallest experiment first: take a template, add one two-point wire between two pins that are both
+- [x] Smallest experiment first: take a template, add one two-point wire between two pins that are both
       unconnected, relocate every pointer, write the ZIP, open it in Proteus 8.6. Does it load, show the
       wire, and does the netlist (Tools, Netlist Compiler, or just the simulation) see the connection?
-- [ ] Same experiment for `ROOT.CDB`: leave it untouched, then try removing or emptying it, and see which
+- [x] Same experiment for `ROOT.CDB`: leave it untouched, then try removing or emptying it, and see which
       Proteus accepts. This decides whether the database must be written too.
 - [ ] Then: a wire stub from a pin with a wire label; a wire onto an existing wire with a junction dot; a
       ground and a power terminal; a labelled terminal; a bus entry (wire from a pin to a bus with a label).

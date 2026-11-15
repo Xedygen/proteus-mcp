@@ -18,13 +18,17 @@ Working and tested through a real MCP client (`scripts/smoke_mcp.py`), on this m
 - build the firmware with MASM 5.10 (headless DOSBox, about 1 s) and store it in the project;
 - launch Proteus, run, pause and stop the simulation, read the simulation log, take screenshots of the
   window, of instrument popups and of Debug popups (registers, memory, 8255 status);
-- get Proteus's own netlist and ask which pins are on a net.
+- get Proteus's own netlist and ask which pins are on a net;
+- **edit schematics** without the GUI: list parts and pins, wire two pins together, attach GND / power /
+  named-net terminals, change properties and values. Edits are written straight into the project file and
+  were confirmed in Proteus 8.6 (opened without new warnings, connections present in Proteus's netlist).
 
 **Blocker:** on this Proteus install the 8086 never reaches its peripherals during simulation, even in
 Labcenter's own 8086 sample, so lab results cannot be checked by simulation yet. See `docs/QUIRKS.md` and the
 "Needs the owner" list in `TODO.md`.
 
-Not built yet: schematic editing (milestone 4), pressing buttons and typing into terminals during a run.
+Not built yet: adding parts that are not already in the file, bus wires/entries, deleting wires, pressing
+buttons and typing into virtual terminals during a run.
 
 ## Install
 
@@ -72,6 +76,10 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` | `sim_start` also checks that the 8086 loaded the EXE stored in the project |
 | `screenshot`, `debug_window` | Main window or a named window; Debug-menu popups while paused |
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
+| `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |
+| `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0` |
+| `schematic_add_terminal` | GND, power or named-net terminal on a pin (`AD0` joins the AD bus line) |
+| `schematic_set_property`, `schematic_set_value` | Edit a part's `{KEY=VALUE}` properties or value text |
 
 Example prompt: *"Open labs/2025/lab5/taslak.pdsprj with the proteus tools, read labs/2025/lab5/tanım.pdf, write
 the 8086 program it asks for, build it, run the simulation and show me the result."*
