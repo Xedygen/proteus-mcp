@@ -198,6 +198,17 @@ def schematic_connect(project: str, a: str, b: str, via_x_grid: float | None = N
 
 
 @mcp.tool()
+def schematic_add_terminal(project: str, pin: str, net: str) -> dict:
+    """Attach a terminal to an unconnected pin, e.g. pin="U3.RESET", net="GND".
+
+    net "GND" places a ground symbol, "VCC"/"POWER" a power symbol; any other name places a named terminal,
+    and all pins with terminals (or wire labels / bus members) of the same name are connected, e.g. "AD0"
+    joins the AD0 line of an AD[0..15] bus. Placed two grid steps out on the side the pin faces; refuses a
+    position that would touch another pin or wire."""
+    return schematic.add_terminal(_closed(project), pin, net)
+
+
+@mcp.tool()
 def schematic_set_property(project: str, ref: str, key: str, value: str) -> dict:
     """Set a component property such as CLOCK (8086), or the ROM image file of a 27C128."""
     return schematic.set_property(_closed(project), ref, key, value)

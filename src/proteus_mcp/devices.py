@@ -85,9 +85,11 @@ def pins(sheet: Sheet, component: dict) -> list[dict]:
         off = transform([-length, 0], pin["angle"], pin["mirror"])
         local = [pin["anchor"][0] + off[0], pin["anchor"][1] + off[1]]
         v = transform(local, angle, mirror)
+        # outward direction: from the pin's anchor on the body towards its free end
+        d = transform(transform([-1, 0], pin["angle"], pin["mirror"]), angle, mirror)
         out.append({"slot": slot, "name": pin["name"], "number": pin["number"], "glyph": pin["glyph"],
                     "xy": [component["origin"][0] + v[0], component["origin"][1] + v[1]],
-                    "connected": bool(ptr), "bus": pin["glyph"] == "$PINBUS"})
+                    "out": d, "connected": bool(ptr), "bus": pin["glyph"] == "$PINBUS"})
     return out
 
 

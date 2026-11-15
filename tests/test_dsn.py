@@ -73,3 +73,17 @@ def test_every_connected_pin_meets_its_wire():
                 if ptr:
                     w = wires[ptr]
                     assert pin["xy"] in (w["points"][0], w["points"][-1]), (path.name, sheet.name_of(comp), pin["name"])
+
+
+@pytest.mark.skipif(not LAB5.exists(), reason="labs/ not present")
+def test_terminals_face_outwards_and_stay_clear(tmp_path):
+    from proteus_mcp import devices, pdsprj, schematic
+    proj = pdsprj.copy(LAB5, tmp_path / "t.pdsprj")
+    r = schematic.add_terminal(proj, "U3.RESET", "GND")       # left-side pin: terminal to the left
+    sheet = schematic.load(proj)
+    _, reset = devices.find_pin(sheet, "U3", "RESET")
+    assert reset["connected"] and r["terminal_grid"][0] < reset["xy"][0] / dsn.GRID
+    r = schematic.add_terminal(proj, "U3.PC0", "NETX")        # right-side pin: terminal to the right
+    assert r["terminal_grid"][0] > 27
+    names = [o["label"]["text"] for o in schematic.load(proj).objects if o["type"] == "terminal"]
+    assert "NETX" in names
