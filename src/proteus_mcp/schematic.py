@@ -421,6 +421,7 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
         new["labels"][1]["text"] = value
     new["identity"] = _next_identity(sheet)
     used = {o["labels"][0]["text"].upper() for o in sheet.components()}
+    used |= {r.split(":")[0] for r in used}      # U4:A..U4:D occupy U4 as well (one package)
     if ref is None:
         # Proteus re-annotates a reference whose prefix does not suit the device (N1 for a NOT gate became
         # U8), so reuse the prefix of an annotated part of the same device when there is one.

@@ -205,7 +205,9 @@ the passing result in `docs/evidence/`.
             running. Open: Memory Dump only shows its first page; generators absent from the netlist.
       - [x] lab6 (2026-11-16): 85 turns, about 1.8 USD, 6 min; DEF / NO / DEF (+ UVW) on terminal 2. Fixed from
             it: wires leave pins before turning and detour round parts; generators listed with frequency.
-      - [ ] odev2
+      - [x] odev2 (2026-11-16): 226 turns, about 2.7 USD, 7.5 min; RAM00 34/CD, RAM01 12/AB. Fixed from it: gate
+            copies no longer take the package name (U4 vs U4:A), schematic_add_terminals (batch).
+      - [ ] A run with a minimal prompt (only "do this lab" + the PDF), relying on the server instructions.
       - Note: the advisor server tool hangs headless sessions; run with --disallowedTools advisor.
 
 ## Review findings still open (Fable review, 2026-11-15)

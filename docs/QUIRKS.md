@@ -40,6 +40,10 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   Check the polarity with the live logic levels (screenshot_part) before relying on it.
 - **8251 framing error:** the log shows `[RECV/SEND] Framing error detected!` once on the first typed character
   of every run; the data still arrives correctly.
+- **Multi-gate devices** (74LS32, 7427 ...): schematic_place_devices places one gate per request; ask for the
+  device four times to get U4:A..U4:D in one package, or copy a gate with schematic_add_part (new package).
+  The generic single-gate OR / AND / NOT devices avoid that.
+- **Memory Contents** popups (62256, 27C128) show 2CH bytes per row: count offsets from the row label.
 - **Virtual Terminal:** raw bytes show as characters; `terminal_mode("Hex Display Mode")` switches to hex.
 - **8086 model:** internal memory 0x00000-0x0FFFF (DBG_MEM_SIZE); the program loads at 0800:0000, so the
   interrupt vector table at 0000:0000 is writable RAM. Keep a stack inside your own segment.

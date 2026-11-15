@@ -165,3 +165,10 @@ def test_route_goes_round_its_own_part(tmp_path):
     n = schematic.add_part(proj, "U5", 10, 0)["part"]          # a NOT gate: Q on the right, D on the left
     pts = schematic.connect(proj, f"{n}.Q", f"{n}.D")["points_grid"]
     assert len(pts) > 2 and any(p[1] != 0 for p in pts)         # not a straight line through the gate
+
+
+@pytest.mark.skipif(not LAB7.exists(), reason="labs/ not present")
+def test_gate_copy_does_not_take_the_package_name(tmp_path):
+    from proteus_mcp import pdsprj, schematic
+    proj = pdsprj.copy(LAB7, tmp_path / "t.pdsprj")
+    assert schematic.add_part(proj, "U2:A", 40, 40)["part"] not in ("U2", "U12")

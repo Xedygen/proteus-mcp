@@ -25,8 +25,8 @@ INSTRUCTIONS = """\
 Tools for Proteus 8.6 (Labcenter) on this Windows machine, aimed at the YTU BLM3061 8086 labs.
 
 Typical flow for a lab PDF: lab_list() to find the lab's template (taslak.pdsprj) -> project_open ->
-schematic_components (parts, pins, connection state) -> wire it offline with schematic_add_terminal (named
-nets, GND/VCC), schematic_connect, schematic_add_part, schematic_add_generator, schematic_rename_label,
+schematic_components (parts, pins, connection state) -> wire it offline with schematic_add_terminals (many
+named nets / GND / VCC per call; schematic_add_terminal for one), schematic_connect, schematic_add_part, schematic_add_generator, schematic_rename_label,
 schematic_delete / schematic_move (new device types: schematic_place_devices) -> firmware_build(source=...)
 (MASM 5.10, errors with line numbers) -> schematic_check (missing wires, lone terminals) -> proteus_launch -> net_of / netlist to check wiring -> sim_start ->
 sim_log, screenshot, screenshot_part, terminal_screenshot, terminal_mode, sim_click, debug_window -> sim_stop
@@ -410,6 +410,22 @@ def schematic_add_terminal(project: str, pin: str, net: str, distance_grid: int 
     joins the AD0 line of an AD[0..15] bus. Placed `distance_grid` steps out on the side the pin faces;
     refuses a position that would touch another pin or wire."""
     return schematic.add_terminal(_closed(project), pin, net, distance_grid)
+
+
+@mcp.tool()
+def schematic_add_terminals(project: str, terminals: list[dict]) -> dict:
+    """Many terminals in one call: `terminals` is a list of {"pin": "ROM00.A0", "net": "A1"} (optional
+    "distance_grid"). Each is placed like schematic_add_terminal; one that fails is reported and the rest
+    still go in. Use it for buses of address/data lines, e.g. 14 ROM address pins at once."""
+    p = _closed(project)
+    done, failed = [], []
+    for t in terminals:
+        try:
+            r = schematic.add_terminal(p, t["pin"], t["net"], int(t.get("distance_grid", 2)))
+            done.append({"pin": t["pin"], "net": t["net"], "resolved": r.get("resolved")})
+        except Exception as e:
+            failed.append({"pin": t.get("pin"), "net": t.get("net"), "error": f"{type(e).__name__}: {e}"})
+    return {"placed": len(done), "failed": failed, "done": done}
 
 
 @mcp.tool()
