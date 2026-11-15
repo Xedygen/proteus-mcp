@@ -143,3 +143,13 @@ def test_labels_find_placeholders():
     names = schematic.labels(LAB7)
     assert {"YA1", "YA6", "AD0"} <= set(names)
     assert names["$IO1$"]["pins"] == ["U5.1"]
+
+
+@pytest.mark.skipif(not LAB5.exists(), reason="labs/ not present")
+def test_check_reports_lonely_terminal(tmp_path):
+    from proteus_mcp import pdsprj, schematic
+    proj = pdsprj.copy(LAB5, tmp_path / "t.pdsprj")
+    schematic.add_terminal(proj, "U3.PC0", "TYPO_NET")
+    r = schematic.check(proj)
+    assert any(x["name"] == "TYPO_NET" for x in r["single_use_names"])
+    assert "PC1" in r["unconnected_pins"]["U3"]

@@ -353,6 +353,14 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
 
 
 @mcp.tool()
+def schematic_check(project: str) -> dict:
+    """Offline check before simulating: every part's visible pins that have no wire, and terminal names that
+    appear only once on the sheet (their partner is missing or misspelled, e.g. CS8251 vs CS_8251). Spare pins
+    are normal; look for the ones your design needs (clock, chip selects, RD/WR, data lines)."""
+    return schematic.check(_project(project))
+
+
+@mcp.tool()
 def schematic_labels(project: str) -> dict:
     """Offline list of net names on the sheet: every terminal / wire label name with how often it appears and
     the pins wired straight to it, e.g. to find a template's placeholder labels (YA1..) or existing nets

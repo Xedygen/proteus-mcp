@@ -399,6 +399,33 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
                      for p in pins(sheet, new) if not p["hidden"]]}
 
 
+def check(project: str | Path) -> dict:
+    """Offline sanity check before simulating: visible pins with no wire (per part) and net names that occur
+    only once on the sheet (a terminal whose partner is missing or misspelled; GND/POWER and bus names whose
+    members are labelled elsewhere are not reported).  Unused pins are normal (spare decoder outputs, unused
+    8259 inputs); look for the ones the design needs."""
+    sheet = load(project)
+    open_pins = {}
+    for comp in sheet.components():
+        missing = [p["name"] for p in pins(sheet, comp) if not p["hidden"] and not p["connected"]]
+        if missing:
+            open_pins[sheet.name_of(comp)] = missing
+    names = labels(project)
+    singles = []
+    for name, info in names.items():
+        # only terminals: wire labels used once are usually a template's spare address lines
+        if name in ("GND", "POWER") or info["terminals"] != 1 or info["wire_labels"]:
+            continue
+        m = re.fullmatch(r"(.+)\[(\d+)\.\.(\d+)\]", name)
+        if m:
+            continue                     # bus terminals join through their bus wire, not by name
+        if any(re.fullmatch(re.escape(b.split("[")[0]) + r"\d+", name)
+               for b in names if b.endswith("]")):
+            continue                     # AD5 alone still joins the AD[0..15] bus
+        singles.append({"name": name, "pins": info["pins"]})
+    return {"unconnected_pins": open_pins, "single_use_names": singles}
+
+
 def labels(project: str | Path) -> dict:
     """Net names on the sheet without Proteus: every terminal and wire label, with the pins wired straight to
     them (a terminal's wire usually ends on one pin).  Power/ground terminals appear as GND / POWER.  Pins
