@@ -1,52 +1,32 @@
 # Quirks: what Claude must know when writing lab code and driving Proteus
 
-## Proteus start-up on this machine: "Symbol ... used but not found in libraries"
+## Start-up warnings and simulation (resolved 2026-11-15)
 
-Every schematic opened in this install shows one or two modal warnings from Schematic Capture during load,
-for example `Symbol "$MKRORIGIN" used but not found in libraries.` (also seen: `$MKRLABEL`). Investigated on
-2026-11-14:
+The first Proteus install here showed `Symbol "$MKRORIGIN" used but not found in libraries.` on every load and
+no 8086 IN/OUT ever reached a peripheral, even in Labcenter's own samples. The owner reinstalled Proteus 8.6;
+since then the labs simulate correctly (lab5 display and buttons, lab6 8251, lab8 8259/ADC/8251).
+A dialog whose text is exactly `Symbol "<name>" used but not found in libraries.` is still answered with OK
+and reported in the launch result's `warnings`; any other unknown dialog stops automation.
 
-| Test | Result |
-| --- | --- |
-| Untouched copy of `labs/2025/lab5/taslak.pdsprj`, `PDS.EXE <path>`, working dir = `BIN\` (as the Start-menu shortcut) | `$MKRORIGIN` warning, then the schematic loads and draws correctly |
-| Same file, working dir = repo folder | same warning |
-| Untouched copy of Labcenter's own `SAMPLES\VSM for 8086\8086 Demo Board\DemoBoard.pdsprj` | same warning |
-| Copy of the 2025 lab5 solution with only `Debug.exe` replaced (`ROOT.DSN`, `ROOT.CDB` byte-identical to the original) | `$MKRLABEL`, then `$MKRORIGIN` |
-| `PDS.EXE` with no project | no warning (Home Page only) |
+## Model quirks found while building the labs
 
-System Settings shows the library folder as `C:\Program Files (x86)\Labcenter Electronics\Proteus 8
-Professional\Library`, and `LIBRARY\SYSTEM.LIB` there is readable and contains `$MKRORIGIN` and `$MKRLABEL`.
-`C:\ProgramData\Labcenter Electronics` does not exist; the registry value `ProgramData` points at the install
-folder. So the cause is in this install, not in the project files and not in how PDS.EXE is started. The exact
-fault inside the install is not known. See "Simulation on this install" below: the same install also fails to
-simulate any 8086 I/O, so these warnings are probably a symptom of a wider install problem, not harmless.
-
-How the MCP handles it: the GUI layer reads every dialog. A dialog whose text is exactly
-`Symbol "<name>" used but not found in libraries.` is recorded and answered with OK, and the symbol names are
-returned with the launch result. Any other dialog stops automation. For a file the MCP wrote, the warnings
-are compared with those of the source file it came from; a warning the source did not produce counts as a
-failed write. "Don't display this message again" is never ticked (that would change the owner's settings).
-
-## Simulation on this install: 8086 I/O never reaches a peripheral (blocks lab acceptance)
-
-Investigated 2026-11-15. The simulator starts, the 8086 loads and executes the program, but no IN or OUT
-reaches the bus peripherals:
-
-| Test | Result |
-| --- | --- |
-| 2025 lab5, `mert_guler` solution, untouched | Display dark. Log shows only the 8255 power-on `CTRLW SET TO 9B`. |
-| 2025 lab5, LordofNights13 solution, untouched and rebuilt with MASM 5.10 | Same. The 8086 Registers window shows execution past `OUT 06H, 82H` and inside the main loop; `IN` from port B returned `00` although PB is pulled up; the 8255 Internal Status window still shows control word `9B`. |
-| Same project, Proteus's own netlist (Netlist Compiler, logical) | Wiring is correct: AD0-AD7 reach 8086, 74HC373 and 8255; PA0-7 through resistors to the display; PB0-7 to buttons with pull-ups. |
-| Pin animation during the run | 8086 RESET low, READY high; latch outputs feeding 8255 A0/A1 stay undefined (grey), as if no bus cycle ever happens. |
-| 2025 lab7, `mert_guler` solution (74273 latches, 74154, DAC0830) | Scope shows no trace. |
-| Labcenter's own `SAMPLES\VSM for 8086\8086 Demo Board` | Same: 8255 stays at `9B`, the Virtual Terminal stays empty. |
-| Labcenter's `SAMPLES\Interactive Simulation\Animated Circuits\TTLClock` (TTL logic only, no CPU) | Works: display lit (`0:00`), counter pins animate. So digital simulation and the 7-segment model are fine; the fault is specific to the 8086 driving its bus. |
-
-All install files are dated February 2017 (PDS.EXE March 2017, SP2), so this is not an obvious mix of
-versions. The 74HC373 model is present in `MODELS\DIGITAL.LML`. **Owner's manual test (2026-11-15):** opening the lab5 solution by hand and pressing Play gives the same
-dark display and the identical log (`CTRLW SET TO 9B` only). So the fault is in this Proteus install, not in
-how the MCP starts or drives it. Until one of the
-sample projects shows output, no lab result can be verified by simulation on this machine.
+- **8251 USART:** after `IN AL, data_port` run `SHR AL, 1` (lab PDFs say so too). Mode 4DH (x1, 8N1) with a
+  9600 Hz clock on TxC/RxC (`schematic_add_generator`) gives 9600 baud. The CLK pin can stay open; tie RESET
+  and /CTS to GND and reset it in software (mode, 40H, mode, command).
+- **8251 TxRDY as an interrupt:** the TxRDY pin does not drop when the transmitter is disabled, so toggling
+  TxEN gives no new edge. Start a burst by writing the first byte yourself; TxRDY then falls and rises.
+- **ADC0804:** do one `IN` from the ADC before the first conversion start (`OUT`), or the first start is
+  ignored and /INTR never falls. Internal clock (INTCLK=1, 640 kHz) is enough; no generator needed.
+  Edge-triggered 8259 input: feed it NOT(/INTR).
+- **8259 PIC:** the model marks a newly requested level in service early, so a non-specific EOI (20H) can
+  clear the wrong level. Send specific EOIs (60H + level). A request latched while masked can come back as the
+  spurious vector base+7; give it a handler that sends an EOI 20H and IRETs (the model needs that EOI).
+- **POT (plain)** is static in simulation (always mid-scale). Use **POT-HG** (place it with
+  `schematic_place_devices`), then hold its red buttons with `sim_click(dx_grid=-1.27, dy_grid=+-1.05,
+  hold_seconds=...)`; roughly one step per 0.2 s.
+- **Virtual Terminal:** raw bytes show as characters; `terminal_mode("Hex Display Mode")` switches to hex.
+- **8086 model:** internal memory 0x00000-0x0FFFF (DBG_MEM_SIZE); the program loads at 0800:0000, so the
+  interrupt vector table at 0000:0000 is writable RAM. Keep a stack inside your own segment.
 
 ## Things that do work (verified 2026-11-15)
 

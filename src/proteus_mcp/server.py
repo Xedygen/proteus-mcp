@@ -24,13 +24,18 @@ PROJECTS = paths.WORK_DIR / "projects"
 INSTRUCTIONS = """\
 Tools for Proteus 8.6 (Labcenter) on this Windows machine, aimed at the YTU BLM3061 8086 labs.
 
-Typical flow: project_open(<template or solution .pdsprj>) -> firmware_get_source / firmware_set_source ->
-firmware_build (MASM 5.10, returns errors with line numbers and stores the EXE in the project) ->
-proteus_launch -> sim_start -> sim_log / screenshot / debug_window -> sim_stop -> proteus_close.
-netlist() returns Proteus's own connectivity and is the way to check wiring.
+Typical flow for a lab PDF: lab_list() to find the lab's template (taslak.pdsprj) -> project_open ->
+schematic_components (parts, pins, connection state) -> wire it offline with schematic_add_terminal (named
+nets, GND/VCC), schematic_connect, schematic_add_part, schematic_add_generator, schematic_rename_label,
+schematic_delete / schematic_move (new device types: schematic_place_devices) -> firmware_build(source=...)
+(MASM 5.10, errors with line numbers) -> proteus_launch -> net_of / netlist to check wiring -> sim_start ->
+sim_log, screenshot, screenshot_part, terminal_screenshot, terminal_mode, sim_click, debug_window -> sim_stop
+-> proteus_close -> project_export to hand the result over.
+Schematic edits need Proteus closed on that project. Mouse-based tools (sim_click, terminal_mode,
+schematic_place_devices) need proteus_background(false).
 
 Read quirks() before writing 8086 code: the assembler is MASM 5.10 (no .IF/INVOKE/@@ labels, 128-char lines)
-and the Proteus models have quirks (8251: SHR AL,1 after IN from the data port).
+and the Proteus models have quirks (8251: SHR AL,1 after IN; 8259 EOIs; ADC0804 first read; POT-HG).
 Every path argument may be absolute; projects are referred to afterwards by the name project_open returns.
 """
 
@@ -131,23 +136,52 @@ def quirks() -> str:
     return paths.QUIRKS_MD.read_text(encoding="utf-8")
 
 
+@mcp.tool()
+def lab_list(filter: str = "") -> list[dict]:
+    """Lab folders under labs/ that have an assignment PDF (tanım.pdf) or a template (taslak.pdsprj), with
+    absolute paths: open the template with project_open. `filter` matches the folder path, e.g. "2025/lab8".
+    Other .pdsprj files in a folder (student solutions) are listed as references, not as starting points."""
+    labs = paths.REPO / "labs"
+    out = []
+    for d in sorted({p.parent for p in labs.glob("**/*") if p.suffix.lower() in (".pdf", ".pdsprj")}):
+        rel = d.relative_to(labs).as_posix()
+        if filter and filter.lower() not in rel.lower():
+            continue
+        pdfs = sorted(str(p) for p in d.glob("*.pdf"))
+        template = next((str(p) for p in d.glob("taslak*.pdsprj")), None)
+        if not pdfs and not template:
+            continue
+        others = sorted(str(p) for p in d.glob("**/*.pdsprj") if str(p) != template)
+        out.append({"lab": rel, "pdf": pdfs, "template": template, "references": others})
+    return out
+
+
 # ----- projects ----------------------------------------------------------------------------------
 @mcp.tool()
 def project_open(path: str, name: str | None = None, overwrite: bool = False) -> dict:
     """Copy a .pdsprj into the workspace and return its name and contents.
 
-    The original file is never modified. `name` defaults to the file's stem. If a workspace project with that
-    name exists it is kept (pass overwrite=True to replace it with a fresh copy).
+    The original file is never modified. `name` defaults to "<folder>_<stem>" (e.g. lab8_taslak), since all
+    lab templates are called taslak.pdsprj. If a workspace project with that name exists it is kept and the
+    result says reused=true (pass overwrite=True for a fresh copy); a name already taken by a copy of a
+    different file is refused.
     """
     src = Path(path)
     if not src.is_file():
         raise ValueError(f"not a file: {src}")
-    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", name or src.stem)  # Proteus 8.6 can fail on non-ASCII paths
+    default = f"{src.parent.name}_{src.stem}"
+    stem = re.sub(r"[^A-Za-z0-9_.-]", "_", name or default)  # Proteus 8.6 can fail on non-ASCII paths
     dst = PROJECTS / f"{stem}.pdsprj"
-    if not dst.exists() or overwrite:
+    origin = PROJECTS / f"{stem}.source"
+    reused = dst.exists() and not overwrite
+    if reused and origin.exists() and origin.read_text(encoding="utf-8") != str(src.resolve()):
+        raise ValueError(f"workspace project {stem} is a copy of {origin.read_text(encoding='utf-8')}; pass "
+                         "another name or overwrite=True")
+    if not reused:
         PROJECTS.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dst)
-    return project_info(stem) | {"source": str(src.resolve())}
+        origin.write_text(str(src.resolve()), encoding="utf-8")
+    return project_info(stem) | {"source": str(src.resolve()), "reused": reused}
 
 
 @mcp.tool()
@@ -265,18 +299,50 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     size = sheet.size()
     s = gui.Session.launch(p)
     try:
-        for d in devices:
-            frame = s.sheet_frame(size)
-            s.place_device(d["device"], frame, size,
-                           (round(float(d["x_grid"]) * schematic.GRID), round(float(d["y_grid"]) * schematic.GRID)))
-        s.save()
+        todo = list(devices)
+        for _attempt in range(3):          # a drop click occasionally misses; check the saved file and retry
+            for d in todo:
+                frame = s.sheet_frame(size)
+                s.place_device(d["device"], frame, size,
+                               (round(float(d["x_grid"]) * schematic.GRID),
+                                round(float(d["y_grid"]) * schematic.GRID)))
+            s.save()
+            have = [c["device"].upper() for c in schematic.components(p, with_pins=False) if c["ref"] not in before]
+            missing = []
+            for d in devices:
+                if d["device"].upper() in have:
+                    have.remove(d["device"].upper())
+                else:
+                    missing.append(d)
+            todo = missing
+            if not todo:
+                break
     finally:
         if s.alive():
             try:
                 s.close()
             except gui.GuiError:
                 s.kill()   # only ever this server's own Proteus process
-    return [c for c in schematic.components(p) if c["ref"] not in before]
+    placed = [c for c in schematic.components(p) if c["ref"] not in before]
+    if todo:
+        raise gui.GuiError(f"asked for {[d['device'] for d in devices]} but only "
+                           f"{[c['ref'] + ' ' + c['device'] for c in placed]} appeared after saving")
+    return placed
+
+
+@mcp.tool()
+def schematic_move(project: str, ref: str, x_grid: float, y_grid: float) -> dict:
+    """Move an unwired part to a grid position (use after schematic_place_devices, whose drop point is only
+    approximate, before wiring it). Returns the new pin positions."""
+    return schematic.move_part(_closed(project), ref, x_grid, y_grid)
+
+
+@mcp.tool()
+def schematic_delete(project: str, ref: str) -> dict:
+    """Delete a part (by reference, e.g. "RV1") or a generator (by name) together with its wires; terminals
+    and generators at the far ends of those wires go too, other pins just become unconnected. Parts that
+    have a ROOT.CDB record (annotated and saved by Proteus) are refused."""
+    return schematic.delete_part(_closed(project), ref)
 
 
 @mcp.tool()
@@ -339,8 +405,10 @@ def proteus_launch(project: str) -> dict:
 
 
 @mcp.tool()
-def proteus_close() -> dict:
-    """Stop any simulation and close the Proteus instance this server started, without saving."""
+def proteus_close(force: bool = False) -> dict:
+    """Stop any simulation and close the Proteus instance this server started, without saving.
+    If it does not close (e.g. an unknown dialog), the session is kept and the result says closed=false;
+    force=True then ends that process (only ever the one this server started)."""
     global _session
     if _session is None or not _session.alive():
         _session = None
@@ -351,9 +419,30 @@ def proteus_close() -> dict:
             s.sim("stop")
     except gui.GuiError:
         pass
-    res = s.close()
-    _session = None
+    try:
+        res = s.close()
+    except gui.GuiError as e:
+        res = {"closed": False, "error": str(e)}
+    if not res.get("closed") and force:
+        s.kill()
+        res = {"closed": True, "forced": True}
+    if res.get("closed") or not s.alive():
+        _session = None
     return res
+
+
+def _shutdown() -> None:
+    """When the client stops the server, do not leave an (off-screen) Proteus of ours running."""
+    if _session is not None and _session.alive():
+        try:
+            _session.kill()
+        except Exception:
+            pass
+
+
+import atexit  # noqa: E402
+
+atexit.register(_shutdown)
 
 
 # ----- simulation ----------------------------------------------------------------------------------
@@ -439,17 +528,31 @@ def _part_screen_box(s: gui.Session, ref: str, margin_grid: float = 2.0):
 
 
 @mcp.tool()
-def sim_click(ref: str, hold_seconds: float = 0.3, settle_seconds: float = 0.8) -> dict:
+def sim_click(ref: str, hold_seconds: float = 0.3, settle_seconds: float = 0.8, dx_grid: float = 0.0,
+              dy_grid: float = 0.0, times: int = 1) -> dict:
     """Press a part during a running simulation: a BUTTON is held for `hold_seconds` then released; a
-    LOGICSTATE or switch toggles. Uses the real mouse on the Proteus window (zooms to the whole sheet first).
-    Follow with screenshot_part to see the effect."""
+    LOGICSTATE or switch toggles. Uses the real mouse on the Proteus window (zooms to the whole sheet first);
+    background mode must be off. Follow with screenshot_part to see the effect.
+
+    dx_grid/dy_grid shift the click from the part's origin (sheet grid units, y up) to hit a part's own
+    controls, e.g. an unrotated POT-HG: dx_grid=-1.27, dy_grid=1.05 raises the wiper (one step per click),
+    dy_grid=-1.05 lowers it; `times` repeats the click."""
     s = _require_session()
     if s.sim_state() != "running":
         raise ValueError("the simulation must be running (sim_start)")
-    (x, y), _ = _part_screen_box(s, ref)
-    s.real_click(x, y, hold=hold_seconds)
+    if dx_grid or dy_grid:
+        comp = schematic.load(s.project).component(ref)
+        size = schematic.load(s.project).size()
+        frame = s.sheet_frame(size)
+        x, y = s.sheet_to_screen(frame, size, (comp["origin"][0] + dx_grid * schematic.GRID,
+                                               comp["origin"][1] + dy_grid * schematic.GRID))
+    else:
+        (x, y), _ = _part_screen_box(s, ref)
+    for _ in range(max(times, 1)):
+        s.real_click(x, y, hold=hold_seconds)
+        time.sleep(0.15)
     time.sleep(settle_seconds)
-    return {"clicked": ref, "screen": [x, y], "state": s.sim_state()}
+    return {"clicked": ref, "screen": [x, y], "times": times, "state": s.sim_state()}
 
 
 @mcp.tool()

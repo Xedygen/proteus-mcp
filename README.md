@@ -40,9 +40,15 @@ scenarios into terminal 1 prints `DEFNODEF` on terminal 2 (`docs/evidence/lab6_t
 placeholders, grounds the ADC pins the template leaves open, writes the program. Netlist checks pass and the
 simulation runs cleanly; the scope trace still needs a look with background mode off.
 
-Not built yet: placing devices that are not already in the file, editing annotated parts' properties/values
-(ROOT.CDB), bus wires/entries, deleting wires, joining a pin to a wire that is already in place (junctions),
-tidy layout of crowded terminals, pressing buttons and typing into virtual terminals during a run.
+`scripts/lab8_example.py` does lab8 (8259 + ADC0804 + 8251) starting from the bare template: replaces the
+static POT with an interactive POT-HG, builds the 74154 decoder, wires 8259, 8251, ADC, terminal and two
+9600 Hz clock generators, and writes an interrupt-driven program (vectors 51H/52H, edge triggered). The
+terminal, switched to Hex Display Mode by the tool, shows the samples; turning the pot changes them
+(e.g. 80 -> 66 -> 99, `docs/evidence/lab8_pot_terminal.png`).
+
+Not built yet: editing annotated parts' properties/values (ROOT.CDB), moving parts that already have wires,
+joining a pin to a wire that is already in place (junctions), tidy layout of crowded terminals, odev2 ROM
+images.
 
 ## Install
 
@@ -56,6 +62,8 @@ uv pip install -e . --python .venv\Scripts\python.exe
 ```
 
 Paths can be overridden with `PROTEUS_DIR`, `DOSBOX_EXE`, `PROTEUS_MCP_MASM` and `PROTEUS_MCP_WORK`.
+`PROTEUS_MCP_BACKGROUND=0` starts with background mode off (the `proteus_background` tool switches it at run
+time; MCP clients pass only a few environment variables, so set it in the client config's `env` block).
 
 ## Connect a client
 
@@ -71,7 +79,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 {
   "mcpServers": {
     "proteus": {
-      "command": "D:\Projects\proteus-mcp\.venv\Scripts\python.exe",
+      "command": "D:\\Projects\\proteus-mcp\\.venv\\Scripts\\python.exe",
       "args": ["-X", "utf8", "-m", "proteus_mcp", "serve"]
     }
   }
@@ -100,9 +108,26 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `schematic_add_terminal` | GND, power or named-net terminal on a pin (`AD0` joins the AD bus line) |
 | `schematic_rename_label` | Rename terminals / wire labels (e.g. lab7's YA1..YA6) |
 | `schematic_set_property`, `schematic_set_value` | Properties / value of unannotated parts (annotated ones live in ROOT.CDB, refused) |
+| `schematic_add_generator` | Digital clock generator on a pin, e.g. 9600 Hz on the 8251's TxC/RxC |
+| `schematic_delete`, `schematic_move` | Delete a part or generator with its wires; move an unwired part (after placing one) |
+| `terminal_mode` | Virtual Terminal options during a run, e.g. Hex Display Mode (real mouse) |
+| `lab_list` | Lab folders with their PDF, template and reference solutions |
 
-Example prompt: *"Open labs/2025/lab5/taslak.pdsprj with the proteus tools, read labs/2025/lab5/tanım.pdf, write
-the 8086 program it asks for, build it, run the simulation and show me the result."*
+## Use it on a lab PDF
+
+1. Connect the server to Claude Code or Claude Desktop (above) and restart the client; `/mcp` in Claude Code
+   or the tools icon in Desktop should list `proteus`.
+2. Leave Proteus closed; the server starts its own instance. Mouse-based steps (placing new device types,
+   pressing buttons, the pot, terminal hex mode) move the real mouse, so either allow that
+   ("you may use the mouse", the model then calls `proteus_background(false)`) or keep the default background
+   mode and accept that those steps are skipped.
+3. Attach the lab's `tanım.pdf` to the chat (Desktop: drag it in; Claude Code: give its path) and ask, e.g.:
+
+   *"Use the proteus tools to do this lab. Find its template with lab_list, read quirks() first, wire what
+   the PDF asks for, write and build the 8086 program, simulate it, show me evidence that every item of
+   İstenenler works, and export the finished project to D:\Odev\lab8.pdsprj."*
+
+The finished project is a normal `.pdsprj`; open it in Proteus to look at or present it.
 
 ## What is in this folder
 

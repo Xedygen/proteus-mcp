@@ -185,38 +185,30 @@ the passing result in `docs/evidence/`.
 
 ## Open work (2026-11-15)
 
-- [ ] lab8: decoder, 8259/8251/ADC wiring, interrupt-driven program; clock generators for the 8251 (9600 Hz)
-      and the ADC0804 (no generator in the template; copy one from another project or place via the GUI).
-- [ ] odev2: OR gates for the ROM0x/ROM1x/RAM chip selects must be placed via the GUI (template has only NOT);
-      ROM images are referenced as 00.bin..11.bin relative to the project, copy them next to it.
-- [ ] Junction taps (connect a pin to a wire that is already there) and deleting wires/parts.
+- [x] lab8: decoder, 8259/8251/ADC wiring, interrupt-driven program, 9600 Hz generators, POT-HG, hex terminal
+      (`scripts/lab8_example.py`, evidence `docs/evidence/lab8_pot_terminal.png`).
+- [x] Deleting parts (`schematic_delete`), moving unwired parts (`schematic_move`), `lab_list`.
+- [ ] odev2: OR gates for the ROM0x/ROM1x/RAM chip selects via schematic_place_devices (template has only
+      NOT); ROM images are referenced as 00.bin..11.bin relative to the project, copy them next to it.
+- [ ] lab7: look at the scope trace (background mode off) and confirm 100 Hz; part 2: move the light source.
+- [ ] Junction taps (connect a pin to a wire that is already there); deleting single wires.
 - [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
-- [ ] Read the 35 simulation messages of the first lab5 example run (likely duplicates of known warnings).
 - [ ] 2024 labs as extra cases; one circuit drawn from scratch.
+- [ ] A real end-to-end session: Claude Desktop/Code with only the PDF and the tools, no example script.
 
-## Waiting for the owner (needs the mouse: background mode off)
+## Review findings still open (Fable review, 2026-11-15)
 
-- [ ] lab7: look at the scope trace (the scope only draws while visible) and confirm 100 Hz.
-- [ ] odev2: place the OR gates (schematic_place_devices).
-- [ ] lab8: turn the potentiometer between samples (sim_click on its arrows).
-- [ ] lab7 part 2: move the light source towards the LDR.
+Fixed already: readable tool errors, project_open name clash, proteus_close keeping a live session + force,
+exit cleanup, set_property backslashes, README Desktop JSON, stale quirks text and server instructions,
+place-devices verification, generator identity clash.
 
-## Needs the owner
-
-- **Simulation does not produce any 8086 I/O on this install (blocks every lab check).** Even Labcenter's own
-  8086 Demo Board sample shows nothing: the CPU runs, but peripherals never see a read or write. Details and
-  evidence in `docs/QUIRKS.md`. Plain TTL logic samples do simulate, so the fault is in the 8086 side
-  (`MODELS\i8086.DLL` reports file version 7.5.21171). **Confirmed by the owner on 2026-11-15:** a manual
-  run shows the same dark display and log, so this install needs a clean reinstall from a properly licensed
-  installer before any lab can be checked by simulation. (Original request, kept for reference:) Please open `labs/2025/lab5/mert_guler/tasarım.pdsprj` by hand, press Play, and
-  check whether the 7-segment display shows a digit. If it stays dark, Proteus needs a clean reinstall from a
-  properly licensed installer; the MCP cannot fix the install.
-
-- **Proteus missing-symbol warnings on every project load.** Opening any schematic, including Labcenter's own
-  8086 sample, shows `Symbol "$MKRORIGIN" used but not found in libraries.` (sometimes also `$MKRLABEL`)
-  before the schematic appears. The library folder setting is correct and `SYSTEM.LIB` contains the symbols,
-  so this is an install problem (details in `docs/QUIRKS.md`). Please check whether you see it when you open
-  a sample from the Start menu yourself; if so, a repair install from your own installer may fix it. The MCP
-  reads and records these warnings and stops on anything else. Note: during the investigation on 2026-11-14,
-  three of my test launches left such a dialog on screen at the same time before I closed them; that is why
-  several appeared at once.
+- [ ] add_generator: no embedded-library check for `$DCLOCK0`; name may collide with a net label; `:g` turns
+      1000000 into `1e+06`; distance_grid unvalidated.
+- [ ] Pin lookup on the 74154: names "0".."15" collide with pin numbers; echo the resolved pin in results.
+- [ ] net_of: tell "no such pin" from "unconnected"; one SDF file per call is left in work/projects.
+- [ ] sim(): poll for the expected state instead of a fixed sleep; sim_log pauses/resumes as a side effect.
+- [ ] Turning background mode off should bring hidden popups back on screen.
+- [ ] add_part: prefix for multi-gate parts (U9:A -> UA1); rotation leaves labels unrotated.
+- [ ] _check_clear misses a corner landing mid-wire; parts with unparsable pin tables are unprotected.
+- [ ] Missing tools: dialog_answer, offline schematic_labels / nets listing, rom_load (odev2).
+- [ ] Docs: FORMAT.md stale "6 of 27 parse" section and NUL bytes near line 121.

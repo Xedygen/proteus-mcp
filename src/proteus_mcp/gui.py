@@ -90,10 +90,12 @@ def dialog_info(h: int) -> dict:
     return {"hwnd": h, "title": win32gui.GetWindowText(h), "texts": texts, "buttons": buttons}
 
 
-def _click_button(h: int, label: str) -> bool:
+def _click_button(h: int, label: str, post: bool = False) -> bool:
+    """Click a dialog button.  post=True for a button that opens another modal box (Save -> "already
+    exists, replace?"): SendMessage would not return until someone answered that box."""
     for c, cls, t in _children(h):
         if cls == "Button" and t.replace("&", "") == label:
-            win32gui.SendMessage(c, win32con.BM_CLICK, 0, 0)
+            (win32gui.PostMessage if post else win32gui.SendMessage)(c, win32con.BM_CLICK, 0, 0)
             return True
     return False
 
@@ -699,21 +701,26 @@ class Session:
         self.command(r"^Save Project")
         t0 = time.monotonic()
         while time.monotonic() - t0 < timeout:
-            for d in self.dialogs():
+            ds = self.dialogs()
+            # the overwrite question first: while it is up, the Save As dialog behind it is disabled
+            ds.sort(key=lambda d: not re.search(r"exist|replace|overwrite|confirm save", " ".join(d["texts"] + [d["title"]]), re.I))
+            for d in ds:
+                if not win32gui.IsWindow(d["hwnd"]) or not win32gui.IsWindowEnabled(d["hwnd"]):
+                    continue
                 if d["title"] == "Save Proteus Project File":
                     edit = next((c for c, cls, _ in _children(d["hwnd"])
                                  if cls == "Edit" and win32gui.GetDlgCtrlID(c) == 1148), None)
                     if edit is None:
                         raise GuiError("Save As dialog: file name box not found")
                     win32gui.SendMessage(edit, win32con.WM_SETTEXT, 0, str(self.project))
-                    _click_button(d["hwnd"], "Save")
+                    _click_button(d["hwnd"], "Save", post=True)
                     time.sleep(0.8)
-                elif re.search(r"exist|replace|overwrite", " ".join(d["texts"] + [d["title"]]), re.I):
+                elif re.search(r"exist|replace|overwrite|confirm save", " ".join(d["texts"] + [d["title"]]), re.I):
                     # overwrite question (wording/buttons vary: Yes/No, Replace/Cancel, OK/Cancel)
                     button = next((b for b in ("Yes", "Replace", "OK") if b in d["buttons"]), None)
                     if button is None:
                         raise UnknownDialog(d["title"], d["texts"], d["buttons"])
-                    _click_button(d["hwnd"], button)
+                    _click_button(d["hwnd"], button, post=True)
                     time.sleep(0.5)
                 else:
                     self.handle_dialogs()

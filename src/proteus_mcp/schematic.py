@@ -380,6 +380,59 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
                      for p in pins(sheet, new) if not p["hidden"]]}
 
 
+def move_part(project: str | Path, ref: str, x_grid: float, y_grid: float) -> dict:
+    """Move a part that has no wires yet to a grid position (e.g. right after schematic_place_devices, whose
+    drop point is only approximate).  Its labels move with it; refuses if a pin would land on an existing
+    connection point."""
+    sheet = load(project)
+    comp = sheet.component(ref)
+    if any(comp["pointers"]):
+        raise dsn.DsnError(f"{ref} already has wires; moving wired parts is not supported")
+    half = GRID // 2
+    origin = [round(x_grid * GRID / half) * half, round(y_grid * GRID / half) * half]
+    dx, dy = origin[0] - comp["origin"][0], origin[1] - comp["origin"][1]
+    spots = _hot_spots(sheet) - {tuple(p["xy"]) for p in pins(sheet, comp)}
+    comp["origin"] = origin
+    for t in comp["labels"]:
+        t["xy"] = [t["xy"][0] + dx, t["xy"][1] + dy]
+    clash = [p for p in pins(sheet, comp) if tuple(p["xy"]) in spots and not p["hidden"]]
+    if clash:
+        raise dsn.DsnError(f"pin {clash[0]['name']} would land on an existing connection point")
+    save(project, sheet)
+    return {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID],
+            "pins": [{"name": p["name"], "grid": [p["xy"][0] / GRID, p["xy"][1] / GRID]}
+                     for p in pins(sheet, comp) if not p["hidden"]]}
+
+
+def delete_part(project: str | Path, ref: str) -> dict:
+    """Delete a part (or a generator, by name) with all its wires.  A terminal or generator at the far end of
+    one of those wires goes too; a pin or junction at the far end just loses the wire.  Parts with a ROOT.CDB
+    record are refused (Proteus hangs on a rewritten CDB and a stale record is untested)."""
+    sheet = load(project)
+    target = next((o for o in sheet.objects if o["type"] == "instrument" and o["labels"][0]["text"] == ref), None)
+    if target is None:
+        target = sheet.component(ref)
+        if _in_cdb(project, target):
+            raise dsn.DsnError(f"{ref} has a ROOT.CDB record; delete it in Proteus instead")
+    wires = {o["start"]: o for o in sheet.objects if o["type"] == "wire"}
+    doomed, gone = [target], []
+    for key in [k for k in target["pointers"] if k]:
+        doomed.append(wires[key])
+        for o in sheet.objects:
+            if o is target or o["type"] == "wire" or key not in o.get("pointers", []):
+                continue
+            if o["type"] in ("terminal", "instrument") and o["pointers"].count(0) + 1 == len(o["pointers"]):
+                doomed.append(o)
+                gone.append(o["label"]["text"] if o["type"] == "terminal" else o["labels"][0]["text"])
+            else:
+                o["pointers"] = [0 if k == key else k for k in o["pointers"]]
+    ids = {id(o) for o in doomed}
+    sheet.objects = [o for o in sheet.objects if id(o) not in ids]
+    sheet.reschedule()
+    save(project, sheet)
+    return {"deleted": ref, "wires": len(doomed) - 1 - len(gone), "terminals_removed": gone}
+
+
 def rename_label(project: str | Path, old: str, new: str) -> dict:
     """Rename every terminal and wire label called `old` to `new` (e.g. the lab7 placeholders YA1..YA6).
     Pins on terminals/labels with the same name are connected, so this moves them onto net `new`."""
@@ -410,7 +463,7 @@ def set_property(project: str | Path, ref: str, key: str, value: str) -> dict:
     text = comp["props"].decode("latin-1")
     pat = re.compile(r"\{" + re.escape(key) + r"=[^}]*\}")
     new = f"{{{key}={value}}}"
-    text = pat.sub(new, text, count=1) if pat.search(text) else text.rstrip("\n") + "\n" + new + "\n"
+    text = pat.sub(lambda m: new, text, count=1) if pat.search(text) else text.rstrip("\n") + "\n" + new + "\n"
     raw = text.encode("latin-1")
     shown = comp["labels"][3]["text"]
     if comp["props_inline"]:

@@ -162,7 +162,14 @@ async def main():
                     raise RuntimeError(f"{tool}{args}: {res.content[0].text}")
                 return res.structured_content or (json.loads(res.content[0].text) if res.content else {})
 
+            await call("proteus_background", on=False)      # pot placement and hex mode use the mouse
             await call("project_open", path=TEMPLATE, name=P, overwrite=True)
+            # the template's POT is static in simulation; an interactive POT-HG replaces it (placed by
+            # Proteus itself, so this step needs background mode off), then the old one is deleted
+            pot = (await call("schematic_place_devices", project=P,
+                              devices=[{"device": "POT-HG", "x_grid": -12, "y_grid": -26}]))["result"][0]["ref"]
+            await call("schematic_delete", project=P, ref="RV1")
+            await call("schematic_move", project=P, ref=pot, x_grid=-12, y_grid=-19)   # where RV1 was
             T = lambda pin, net: call("schematic_add_terminal", project=P, pin=pin, net=net)
             inv = (await call("schematic_add_part", project=P, like="U8", x_grid=24, y_grid=-28))["part"]
             # decoder
@@ -194,9 +201,9 @@ async def main():
                 await T(f"U2.{pin}", f"AD{i}")
             await T(f"{inv}.D", "ADC_INTR")
             await T(f"{inv}.Q", "ADCINT")
-            await T("RV1.1", "GND")
-            await T("RV1.2", "VCC")
-            await T("RV1.3", "VIN")
+            await T(f"{pot}.1", "GND")
+            await T(f"{pot}.2", "VCC")
+            await T(f"{pot}.3", "VIN")
             build = await call("firmware_build", project=P, source=SOURCE)
             print("firmware:", {k: build[k] for k in ("ok", "errors", "stored") if k in build})
 
@@ -210,14 +217,19 @@ async def main():
                 checks["IR1 <- TxRDY"] = "U9.TXRDY" in (await net("U5", "IR1"))["members"]
                 checks["IR2 <- NOT(/INTR)"] = f"{inv}.Q" in (await net("U5", "IR2"))["members"]
                 checks["8259 INT -> 8086 INTR"] = "U1.INTR" in (await net("U5", "INT"))["members"]
-                checks["VIN+ <- wiper"] = "RV1.3" in (await net("U2", "VIN+"))["members"]
+                checks["VIN+ <- wiper"] = f"{pot}.3" in (await net("U2", "VIN+"))["members"]
                 checks["ADC DB0 on AD0"] = (await net("U2", "DB0(LSB)"))["net"] == "AD0"
                 sim = await call("sim_start", wait_seconds=4)
                 checks["firmware loaded"] = sim["firmware"].get("matches_project_exe")
-                await asyncio.sleep(3)
-                shots = await s.call_tool("terminal_screenshot", {})
-                for i, c in enumerate(x for x in shots.content if x.type == "image"):
-                    (REPO / "work" / f"lab8_terminal_{i}.png").write_bytes(base64.b64decode(c.data))
+                await call("terminal_mode", item="Hex Display Mode", on=True)
+                # turn the pot: hold its lower button, then its upper one; the readings follow
+                for step, (dy, hold) in enumerate(((0, 0), (-1.05, 4.0), (1.05, 8.0))):
+                    if hold:
+                        await call("sim_click", ref=pot, dx_grid=-1.27, dy_grid=dy, hold_seconds=hold)
+                    await asyncio.sleep(1.5)
+                    shots = await s.call_tool("terminal_screenshot", {})
+                    for c in (x for x in shots.content if x.type == "image"):
+                        (REPO / "work" / f"lab8_terminal_{step}.png").write_bytes(base64.b64decode(c.data))
                 log = await call("sim_log")
                 print("log:", [r["message"][:90] for r in log["result"]][-10:])
                 await call("sim_stop")
