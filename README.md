@@ -10,6 +10,72 @@ the "İstenenler" list.
 Status: **in progress.** [TODO.md](TODO.md) is the work order, [docs/FORMAT.md](docs/FORMAT.md) the file
 format notes.
 
+## Status
+
+Working and tested through a real MCP client (`scripts/smoke_mcp.py`), on this machine:
+
+- open a lab project into a workspace copy, read and replace its 8086 source;
+- build the firmware with MASM 5.10 (headless DOSBox, about 1 s) and store it in the project;
+- launch Proteus, run, pause and stop the simulation, read the simulation log, take screenshots of the
+  window, of instrument popups and of Debug popups (registers, memory, 8255 status);
+- get Proteus's own netlist and ask which pins are on a net.
+
+**Blocker:** on this Proteus install the 8086 never reaches its peripherals during simulation, even in
+Labcenter's own 8086 sample, so lab results cannot be checked by simulation yet. See `docs/QUIRKS.md` and the
+"Needs the owner" list in `TODO.md`.
+
+Not built yet: schematic editing (milestone 4), pressing buttons and typing into terminals during a run.
+
+## Install
+
+Requirements: Windows, Proteus 8.6 SP2, DOSBox 0.74-3, Python 3.10+, `uv`.
+
+```powershell
+cd D:\Projects\proteus-mcp
+uv venv .venv
+uv pip install -e . --python .venv\Scripts\python.exe
+.venv\Scripts\python.exe -m proteus_mcp doctor
+```
+
+Paths can be overridden with `PROTEUS_DIR`, `DOSBOX_EXE`, `PROTEUS_MCP_MASM` and `PROTEUS_MCP_WORK`.
+
+## Connect a client
+
+Claude Code:
+
+```powershell
+claude mcp add proteus -- D:\Projects\proteus-mcp\.venv\Scripts\python.exe -X utf8 -m proteus_mcp serve
+```
+
+Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "proteus": {
+      "command": "D:\Projects\proteus-mcp\.venv\Scripts\python.exe",
+      "args": ["-X", "utf8", "-m", "proteus_mcp", "serve"]
+    }
+  }
+}
+```
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `proteus_doctor` | Install, versions, DOSBox and MASM, running Proteus processes |
+| `quirks` | Rules for code that builds and simulates here (MASM 5.10 limits, model quirks) |
+| `project_open`, `project_info`, `project_export` | Workspace copies under `work/projects`; originals are never touched |
+| `firmware_get_source`, `firmware_build` | Read `main.asm`; assemble and link (optionally with new source), store EXE in the project; errors with line numbers |
+| `proteus_launch`, `proteus_close` | One Proteus instance at a time, only one this server started |
+| `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` | `sim_start` also checks that the 8086 loaded the EXE stored in the project |
+| `screenshot`, `debug_window` | Main window or a named window; Debug-menu popups while paused |
+| `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
+
+Example prompt: *"Open labs/2025/lab5/taslak.pdsprj with the proteus tools, read labs/2025/lab5/tanım.pdf, write
+the 8086 program it asks for, build it, run the simulation and show me the result."*
+
 ## What is in this folder
 
 | Path | Contents |
@@ -96,7 +162,7 @@ Conclusion: nothing can be dropped in for 8.6. The plan is to build our own serv
 
 Both declare an MIT licence. Confirm that before copying any code, and keep attribution if code is reused.
 
-## Proposed design
+## Design
 
 Python MCP server over stdio (official `mcp` SDK, managed with `uv`), Windows only.
 
@@ -123,7 +189,7 @@ file may occasionally use syntax MASM 5.10 rejects. The firmware spike in TODO c
 
 The same DOSBox + `debug.exe` pair can run and inspect the plain assembly labs (lab 1 to 4) if those are in scope.
 
-### Planned tools (first draft)
+### Original tool plan (see Tools above for what exists)
 
 | Group | Tools |
 | --- | --- |

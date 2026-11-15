@@ -18,13 +18,50 @@ System Settings shows the library folder as `C:\Program Files (x86)\Labcenter El
 Professional\Library`, and `LIBRARY\SYSTEM.LIB` there is readable and contains `$MKRORIGIN` and `$MKRLABEL`.
 `C:\ProgramData\Labcenter Electronics` does not exist; the registry value `ProgramData` points at the install
 folder. So the cause is in this install, not in the project files and not in how PDS.EXE is started. The exact
-fault inside the install is not known.
+fault inside the install is not known. See "Simulation on this install" below: the same install also fails to
+simulate any 8086 I/O, so these warnings are probably a symptom of a wider install problem, not harmless.
 
 How the MCP handles it: the GUI layer reads every dialog. A dialog whose text is exactly
 `Symbol "<name>" used but not found in libraries.` is recorded and answered with OK, and the symbol names are
 returned with the launch result. Any other dialog stops automation. For a file the MCP wrote, the warnings
 are compared with those of the source file it came from; a warning the source did not produce counts as a
 failed write. "Don't display this message again" is never ticked (that would change the owner's settings).
+
+## Simulation on this install: 8086 I/O never reaches a peripheral (blocks lab acceptance)
+
+Investigated 2026-11-15. The simulator starts, the 8086 loads and executes the program, but no IN or OUT
+reaches the bus peripherals:
+
+| Test | Result |
+| --- | --- |
+| 2025 lab5, `mert_guler` solution, untouched | Display dark. Log shows only the 8255 power-on `CTRLW SET TO 9B`. |
+| 2025 lab5, LordofNights13 solution, untouched and rebuilt with MASM 5.10 | Same. The 8086 Registers window shows execution past `OUT 06H, 82H` and inside the main loop; `IN` from port B returned `00` although PB is pulled up; the 8255 Internal Status window still shows control word `9B`. |
+| Same project, Proteus's own netlist (Netlist Compiler, logical) | Wiring is correct: AD0-AD7 reach 8086, 74HC373 and 8255; PA0-7 through resistors to the display; PB0-7 to buttons with pull-ups. |
+| Pin animation during the run | 8086 RESET low, READY high; latch outputs feeding 8255 A0/A1 stay undefined (grey), as if no bus cycle ever happens. |
+| 2025 lab7, `mert_guler` solution (74273 latches, 74154, DAC0830) | Scope shows no trace. |
+| Labcenter's own `SAMPLES\VSM for 8086\8086 Demo Board` | Same: 8255 stays at `9B`, the Virtual Terminal stays empty. |
+
+All install files are dated February 2017 (PDS.EXE March 2017, SP2), so this is not an obvious mix of
+versions. The 74HC373 model is present in `MODELS\DIGITAL.LML`. Not yet done: the owner opening a project by
+hand and pressing Play, which separates "install" from "the way the MCP launches Proteus". Until one of the
+sample projects shows output, no lab result can be verified by simulation on this machine.
+
+## Things that do work (verified 2026-11-15)
+
+- **Firmware attach:** writing `FIRMWARE/<name>/Debug/Debug.exe` into the project ZIP is enough. At run time
+  Proteus unpacks it to a new temp folder and loads it (`Program Loaded: N bytes`); `sim_start` compares N with
+  the load size of the EXE in the project. Proteus's own Build step is not involved.
+- **Without CodeView info** the log adds `[EXE] Error: No debug information or its format is not supported`.
+  The program still loads and runs; only source-level debugging is lost. (`debug_info=True` builds with
+  `/Zi /CO`; not yet checked whether Proteus 8.6 reads MASM 5.10's CodeView format.)
+- **Netlist:** Tool > Netlist Compiler, SDF, **Logical** mode. Physical mode silently drops every part without
+  a reference designator (in the lab files: all resistors, buttons and displays). Output file names must be
+  unique: Windows names are case-insensitive and Proteus appends `.SDF`.
+- **Tabs:** Proteus restores the last tab per project from `<project>.<host>.<user>.workspace` and switches to
+  Source Code when a simulation pauses. The Source Code tab has a different menu bar (no Tool menu). The MCP
+  deletes stale workspace files before launch and clicks the Schematic Capture tab when it needs that menu.
+- **Debug popups** (Registers, Memory Dump, 8255 Internal Status, Source Code, Watch Window) open from the
+  Debug menu while paused and can be captured.
 
 ## Firmware build (MASM 5.10 through DOSBox)
 

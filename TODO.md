@@ -75,23 +75,26 @@ about the file format), this file.
 
 ## Milestone 3: GUI control (can start in parallel with 2)
 
-- [ ] `gui.py`: launch `PDS.EXE <project>` and track that process id. Detect the main window and its title.
+- [x] `gui.py`: launch `PDS.EXE <project>` and track that process id. Detect the main window and its title.
       Handle the start-up dialogs that appear on this machine (record them in `docs/QUIRKS.md`).
-- [ ] Find how to reach commands. Try in order: Win32 menu command ids via UI Automation (the approach in
+- [x] Find how to reach commands. Try in order: Win32 menu command ids via UI Automation (the approach in
       `jackmaikr4-sketch/keil-proteus-automation-skill-mcp`, `src/proteus.ts` and `scripts/desktop.ps1`),
       then keyboard shortcuts (F12 run, Pause, Shift+Pause stop, as configured in this install), then clicks
       on the transport buttons at the bottom left.
-- [ ] `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, and a screenshot of the Proteus window returned as
+- [x] `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, and a screenshot of the Proteus window returned as
       an image the model can look at. Screenshot of a named popup window (Virtual Terminal, Digital
       Oscilloscope, Memory Contents) as well.
-- [ ] Read the simulation log / message window as text if it is reachable; otherwise screenshot it.
-- [ ] **First end-to-end proof:** open the 2025 lab5 solution (`labs/2025/lab5/mert_guler/tasarım.pdsprj`,
+- [x] Read the simulation log / message window as text if it is reachable; otherwise screenshot it.
+- [~] **First end-to-end proof:** (firmware attach answered: replacing Debug.exe in the ZIP works, verified
+      by the load size in the log. The display check fails on this install; see Needs the owner.) open the 2025 lab5 solution (`labs/2025/lab5/mert_guler/tasarım.pdsprj`,
       copied to `work/`), rebuild its `main.asm` with the milestone 1 builder, attach the EXE, start the
       simulation, press a button, screenshot, and see the right digit on the 7-segment display.
       This also answers how firmware is attached in 8.6: test whether replacing
       `FIRMWARE/<name>/Debug/Debug.exe` inside the ZIP is enough, or the `{PROGRAM=...}` property must be set
       to an absolute path of an EXE on disk (it exists in both `ROOT.DSN` and `ROOT.CDB`), or the Edit
       Component dialog must be used. Pick the method that works and document it.
+- [x] Netlist from Proteus itself (Netlist Compiler, logical mode) as the connectivity reference: `netlist`,
+      `net_of` tools. This replaces rebuilding nets from DSN geometry for verification.
 - [ ] Interaction: press and release a button, toggle a switch, set a potentiometer, type into a Virtual
       Terminal. Clicking needs sheet coordinate to screen coordinate mapping: derive it from the editing
       window's view (zoom-to-fit, then the known sheet extents), and confirm with a click on a known part.
@@ -127,7 +130,7 @@ the file with the milestone 2 reader and confirm the netlist changed as intended
 
 ## Milestone 5: the MCP server
 
-- [ ] `server.py` with the official `mcp` SDK (FastMCP, stdio). Tools return compact JSON; screenshots are
+- [x] `server.py` with the official `mcp` SDK (FastMCP, stdio). Tools return compact JSON; screenshots are
       returned as image content. Tool descriptions say what the tool verifies and what it does not.
 - [ ] Tools (adjust names as the design settles):
       - `proteus_doctor`
@@ -144,7 +147,7 @@ the file with the milestone 2 reader and confirm the netlist changed as intended
       - `lab_read(pdf)` is not needed: Claude reads PDFs itself. Offer `quirks()` returning `docs/QUIRKS.md`.
 - [ ] Config snippets in the README for Claude Code (`claude mcp add` / `.mcp.json`) and Claude Desktop
       (`claude_desktop_config.json`), using the venv interpreter and `-X utf8`.
-- [ ] Smoke test script: start the server over stdio, list tools, call `proteus_doctor`.
+- [x] Smoke test script: start the server over stdio, list tools, call `proteus_doctor`.
 - [ ] Commit.
 
 ## Milestone 6: lab acceptance
@@ -175,7 +178,11 @@ the passing result in `docs/evidence/`.
 
 ## Needs the owner
 
-(Add items here when something cannot be done without the owner.)
+- **Simulation does not produce any 8086 I/O on this install (blocks every lab check).** Even Labcenter's own
+  8086 Demo Board sample shows nothing: the CPU runs, but peripherals never see a read or write. Details and
+  evidence in `docs/QUIRKS.md`. Please open `labs/2025/lab5/mert_guler/tasarım.pdsprj` by hand, press Play, and
+  check whether the 7-segment display shows a digit. If it stays dark, Proteus needs a clean reinstall from a
+  properly licensed installer; the MCP cannot fix the install.
 
 - **Proteus missing-symbol warnings on every project load.** Opening any schematic, including Labcenter's own
   8086 sample, shows `Symbol "$MKRORIGIN" used but not found in libraries.` (sometimes also `$MKRLABEL`)
