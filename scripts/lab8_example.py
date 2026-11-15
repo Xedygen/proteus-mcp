@@ -66,12 +66,15 @@ START:  CLI
         OUT P8259B, AL
         MOV AL, 0FBH        ; OCW1: only IR2 (ADC) enabled
         OUT P8259B, AL
-        ; 8251: mode, internal reset, mode, command (transmitter off until five samples are in)
-        MOV AL, 4DH         ; 1 stop bit, no parity, 8 data bits, x1
+        ; 8251: three dummy bytes and an internal reset bring it to the mode state from any state
+        ; (RESET is tied low), then mode and command
+        MOV AL, 00H
         OUT CTRL51, AL
-        MOV AL, 40H
         OUT CTRL51, AL
-        MOV AL, 4DH
+        OUT CTRL51, AL
+        MOV AL, 40H         ; internal reset
+        OUT CTRL51, AL
+        MOV AL, 4DH         ; mode: 1 stop bit, no parity, 8 data bits, x1
         OUT CTRL51, AL
         MOV AL, 15H         ; error reset, receiver on, transmitter on
         OUT CTRL51, AL
@@ -98,6 +101,9 @@ ADCISR: PUSH AX
 TXGO:   MOV COUNT, 0
         MOV AL, 0FDH        ; only IR1 (transmitter) enabled
         OUT P8259B, AL
+WTX0:   IN  AL, CTRL51      ; the last byte of the previous round may still sit in the buffer
+        TEST AL, 01H        ; TxRDY
+        JZ  WTX0
         MOV AL, BUF         ; first byte: its TxRDY edges raise IR1 for the rest
         OUT DATA51, AL
         MOV IDX, 1
