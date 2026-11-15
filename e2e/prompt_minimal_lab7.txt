@@ -1,0 +1,2 @@
+Do the lab in this PDF using the proteus tools: D:\Projects\proteus-mcp\labs\2025\lab7\tanım.pdf
+Save the finished project as D:\Projects\proteus-mcp\work\e2e\lab7_result.pdsprj and tell me what you did.
