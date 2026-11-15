@@ -239,17 +239,17 @@ _ROTATIONS = {0: 0, 90: 900, 180: 1800, 270: 2700}
 
 def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotation: int | None = None,
              value: str | None = None, ref: str | None = None) -> dict:
-    """Place a copy of an existing UNANNOTATED part (e.g. like="RES#0010") at a grid position.
+    """Place a copy of an existing part (e.g. like="RES#0010" or like="U5") at a grid position.
 
-    Only devices already in the file can be placed (their library definition is embedded), and only
-    unannotated ones, because annotated parts also need a ROOT.CDB record that cannot be written yet.
-    The copy gets its own reference (`ref`, default: device initial + next free number, e.g. R1), because
-    Proteus annotates unreferenced copies itself on load.  It has no wires."""
+    Only devices already in the file can be placed (their library definition is embedded).
+    The copy gets its own reference (`ref`, default: the prefix of an existing part of that device plus the
+    next free number, e.g. U8 or R1), because Proteus annotates unreferenced copies itself on load and may
+    still re-annotate a reference it considers unsuitable: the netlist name is authoritative.  The copy has
+    no wires.  Annotated sources work as well (verified with a NOT gate), the copy simply has no ROOT.CDB
+    record, which Proteus accepts."""
     import copy
     sheet = load(project)
     src = sheet.component(like)
-    if src["labels"][0]["text"]:
-        raise dsn.DsnError(f"{like} is annotated; only unannotated parts (resistors, buttons ...) can be copied")
     new = copy.deepcopy(src)
     origin = [round(x_grid * GRID / (GRID // 2)) * (GRID // 2), round(y_grid * GRID / (GRID // 2)) * (GRID // 2)]
     dx, dy = origin[0] - src["origin"][0], origin[1] - src["origin"][1]
@@ -266,7 +266,11 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
     new["identity"] = max(o["identity"] for o in sheet.components()) + 1
     used = {o["labels"][0]["text"].upper() for o in sheet.components()}
     if ref is None:
-        prefix = re.sub(r"[^A-Z]", "", src["device"].upper())[:1] or "X"
+        # Proteus re-annotates a reference whose prefix does not suit the device (N1 for a NOT gate became
+        # U8), so reuse the prefix of an annotated part of the same device when there is one.
+        same = [o["labels"][0]["text"] for o in sheet.components()
+                if o["device"] == src["device"] and o["labels"][0]["text"]]
+        prefix = re.sub(r"[^A-Za-z]", "", same[0]) if same else ("R" if src["device"].upper() == "RES" else "U")
         n = 1
         while f"{prefix}{n}" in used:
             n += 1

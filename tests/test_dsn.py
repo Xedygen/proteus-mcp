@@ -104,14 +104,13 @@ def test_new_wire_starts_at_first_serialised_end(tmp_path):
 
 
 @pytest.mark.skipif(not LAB5.exists(), reason="labs/ not present")
-def test_add_part_copies_unannotated_parts(tmp_path):
+def test_add_part_copies(tmp_path):
     from proteus_mcp import pdsprj, schematic
     proj = pdsprj.copy(LAB5, tmp_path / "t.pdsprj")
     r = schematic.add_part(proj, "RES#0010", 30, 20, value="220")
     assert r["part"] == "R1"
     names = {c["ref"]: c for c in schematic.components(proj)}
     assert names["R1"]["value"] == "220" and not any(p["connected"] for p in names["R1"]["pins"])
-    with pytest.raises(dsn.DsnError):
-        schematic.add_part(proj, "U2", 0, 40)                 # annotated: needs a ROOT.CDB record
+    assert schematic.add_part(proj, "U2", 0, 40)["part"] == "U4"   # annotated source: same prefix, next number
     with pytest.raises(dsn.DsnError):
         schematic.add_part(proj, "RES#0010", 30, 20)          # pins would land on R1's pins
