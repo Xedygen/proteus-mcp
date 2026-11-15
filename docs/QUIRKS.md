@@ -32,6 +32,10 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   program writes; read it in debug_window("8255 Internal Status") instead.
 - **Debug panels** (Registers, Memory Dump, Variables) open docked at the bottom of the Source Code tab;
   debug_window finds them by name and returns their picture.
+- **Clock generators** do not show up in the netlist: a pin with only a generator looks like a single-pin net
+  in net_of. Confirm clocks from behaviour (e.g. the baud rate works) or with schematic_labels.
+- **Memory Dump** shows only its first page (0000-0107H) in debug_window and cannot be scrolled from the tools,
+  so the interrupt vector table at 0:0144H is not readable that way.
 - **Virtual Terminal:** raw bytes show as characters; `terminal_mode("Hex Display Mode")` switches to hex.
 - **8086 model:** internal memory 0x00000-0x0FFFF (DBG_MEM_SIZE); the program loads at 0800:0000, so the
   interrupt vector table at 0000:0000 is writable RAM. Keep a stack inside your own segment.

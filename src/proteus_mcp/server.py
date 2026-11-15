@@ -308,48 +308,65 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
 
     `devices` is a list of {"device": "74HC4078", "x_grid": 0, "y_grid": -30}. Proteus is launched on the
     project, each device is picked in the Pick Devices dialog and dropped near the given point, the project is
-    saved by Proteus (so ROOT.CDB stays consistent) and Proteus is closed. Returns the new parts with their
-    actual reference, position and pins (positions land a few grid steps from the request; wire with the
-    returned pin positions). Multi-gate packages appear per gate, e.g. U9:A."""
+    saved by Proteus (so ROOT.CDB stays consistent) and Proteus is closed. Proteus drops parts some grid steps
+    away from the click, so the result is checked: a part that landed on a wire is undone and placed again,
+    and each part is then moved to the requested spot if that is free. Returns the new parts with their
+    actual reference, position and pins; pick an empty area (schematic_components shows what is where).
+    Needs background mode off (real mouse). Multi-gate packages appear per gate, e.g. U9:A."""
     global _session
     p = _closed(project)
     if _session is not None and _session.alive():
         raise ValueError(f"Proteus is running on {_session.project.stem}; call proteus_close first")
     before = {c["ref"] for c in schematic.components(p, with_pins=False)}
-    sheet = schematic.load(p)
-    size = sheet.size()
-    snapshot = p.read_bytes()           # restored if placement fails, so no stray parts are left behind
-    todo = list(devices)
-    s = gui.Session.launch(p)
-    try:
-        for _attempt in range(3):          # a drop click occasionally misses; check the saved file and retry
-            for d in todo:
-                frame = s.sheet_frame(size)
-                s.place_device(d["device"], frame, size,
-                               (round(float(d["x_grid"]) * schematic.GRID),
-                                round(float(d["y_grid"]) * schematic.GRID)))
+    size = schematic.load(p).size()
+    snapshot = p.read_bytes()           # restored before a retry and on failure: no stray parts are left
+    G = schematic.GRID
+    want = [(d["device"], float(d["x_grid"]), float(d["y_grid"])) for d in devices]
+    shift = [0.0, 0.0]                  # Proteus drops parts some grid steps from the click; learned per call
+    problem = "nothing placed"
+    for _round in range(3):
+        if _round:
+            p.write_bytes(snapshot)
+        s = gui.Session.launch(p)
+        try:
+            for dev, x, y in want:
+                s.place_device(dev, s.sheet_frame(size), size,
+                               (round((x + shift[0]) * G), round((y + shift[1]) * G)))
             s.save()
-            have = [c["device"].upper() for c in schematic.components(p, with_pins=False) if c["ref"] not in before]
-            missing = []
-            for d in devices:
-                if d["device"].upper() in have:
-                    have.remove(d["device"].upper())
-                else:
-                    missing.append(d)
-            todo = missing
-            if not todo:
-                break
-    except BaseException:
+        except BaseException:
+            _stop(s)
+            p.write_bytes(snapshot)
+            raise
         _stop(s)
-        p.write_bytes(snapshot)
-        raise
-    _stop(s)
-    placed = [c for c in schematic.components(p) if c["ref"] not in before]
-    if todo:
-        p.write_bytes(snapshot)
-        raise gui.GuiError(f"asked for {[d['device'] for d in devices]} but only "
-                           f"{[c['ref'] + ' ' + c['device'] for c in placed]} appeared after saving; the project was restored to its state before the call")
-    return placed
+        new = [c for c in schematic.components(p) if c["ref"] not in before]
+        pool, matched = list(new), []
+        for dev, x, y in want:
+            hit = next((c for c in pool if c["device"].upper() == dev.upper()), None)
+            if hit is not None:
+                pool.remove(hit)
+            matched.append(hit)
+        found = [(m, x, y) for m, (_, x, y) in zip(matched, want) if m is not None]
+        if found:                       # learn where Proteus actually drops relative to the click
+            shift[0] -= sum(m["grid"][0] - (x + shift[0]) for m, x, y in found) / len(found)
+            shift[1] -= sum(m["grid"][1] - (y + shift[1]) for m, x, y in found) / len(found)
+        wired = [m["ref"] for m in matched if m is not None and any(q["connected"] for q in m["pins"])]
+        if None in matched:
+            problem = "a drop click missed"
+        elif wired:
+            # dropped onto an existing wire: Proteus connected the pins to it; start again further off
+            problem = f"{wired} landed on existing wires"
+        else:
+            out = []
+            for m, (_, x, y) in zip(matched, want):
+                try:                    # put each part where it was asked for (it has no wires yet)
+                    schematic.move_part(p, m["ref"], x, y)
+                except Exception:
+                    pass                # spot taken: keep it where Proteus dropped it
+            moved = {c["ref"]: c for c in schematic.components(p)}
+            return [moved[m["ref"]] for m in matched]
+    p.write_bytes(snapshot)
+    raise gui.GuiError(f"placing {[d['device'] for d in devices]} failed three times ({problem}); the project "
+                       "was restored to its state before the call. Try another free area (x_grid/y_grid).")
 
 
 @mcp.tool()
@@ -489,7 +506,11 @@ def sim_start(wait_seconds: float = 3.0) -> dict:
     """Run (or resume) the simulation, wait, and report state, the simulation log, and whether the program
     the 8086 loaded has the size of the EXE stored in the project."""
     s = _require_session()
-    state = s.sim("start", settle=max(wait_seconds, 1.0))
+    if s.sim_state() == "running":           # already running: nothing to start, just wait and report
+        time.sleep(max(wait_seconds, 0))
+        state = "running"
+    else:
+        state = s.sim("start", settle=max(wait_seconds, 1.0))
     if s.sim_state() not in ("running", "paused"):
         errors = s.compiler_errors()
         raise ToolError("simulation did not start" + (": " + "; ".join(
