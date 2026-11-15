@@ -534,9 +534,14 @@ class Session:
         time.sleep(1.0)
         self.hide_popups()
         title = re.sub(r"^&?\d+\.\s*|&", "", hits[0].path.split("/")[-1])
-        for c, _, t in _children(self.main):
-            if t.replace("&", "") == title:
-                return c
+        # docked panels are children titled with the submenu in front ("8086 Registers - U1"); several
+        # panels exist hidden from the start, so prefer the visible match
+        kids = [(c, t.replace("&", "")) for c, _, t in _children(self.main)]
+        for want_visible in (True, False):
+            for c, t in kids:
+                if (t == title or t.endswith(" " + title)) and \
+                        (not want_visible or win32gui.IsWindowVisible(c)):
+                    return c
         for h in _windows(self.pid):
             if rx.search(win32gui.GetWindowText(h)):
                 return h
