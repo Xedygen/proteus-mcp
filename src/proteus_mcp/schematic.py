@@ -121,8 +121,9 @@ def _check_clear(sheet: dsn.Sheet, points: list[list[int]], allowed: list[list[i
         for c, d in zip(w["points"], w["points"][1:]):
             for a, b in zip(points, points[1:]):
                 if _overlaps(a, b, c, d):
-                    raise dsn.DsnError(f"route {[[q / GRID for q in p] for p in points]} runs along an existing "
-                                       f"wire near {[c[0] / GRID, c[1] / GRID]}; choose another via_x_grid")
+                    g = lambda p: [p[0] / GRID, p[1] / GRID]
+                    raise dsn.DsnError(f"route {[g(p) for p in points]}: its segment {g(a)}-{g(b)} runs along "
+                                       f"the existing wire segment {g(c)}-{g(d)}; choose another via_x_grid")
 
 
 def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None) -> dict:

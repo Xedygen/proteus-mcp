@@ -28,7 +28,7 @@ Typical flow for a lab PDF: lab_list() to find the lab's template (taslak.pdsprj
 schematic_components (parts, pins, connection state) -> wire it offline with schematic_add_terminal (named
 nets, GND/VCC), schematic_connect, schematic_add_part, schematic_add_generator, schematic_rename_label,
 schematic_delete / schematic_move (new device types: schematic_place_devices) -> firmware_build(source=...)
-(MASM 5.10, errors with line numbers) -> proteus_launch -> net_of / netlist to check wiring -> sim_start ->
+(MASM 5.10, errors with line numbers) -> schematic_check (missing wires, lone terminals) -> proteus_launch -> net_of / netlist to check wiring -> sim_start ->
 sim_log, screenshot, screenshot_part, terminal_screenshot, terminal_mode, sim_click, debug_window -> sim_stop
 -> proteus_close -> project_export to hand the result over.
 Schematic edits need Proteus closed on that project. Mouse-based tools (sim_click, terminal_mode,
@@ -590,8 +590,8 @@ def sim_click(ref: str, hold_seconds: float = 0.3, settle_seconds: float = 0.8, 
     background mode must be off. Follow with screenshot_part to see the effect.
 
     dx_grid/dy_grid shift the click from the part's origin (sheet grid units, y up) to hit a part's own
-    controls, e.g. an unrotated POT-HG: dx_grid=-1.27, dy_grid=1.05 raises the wiper (one step per click),
-    dy_grid=-1.05 lowers it; `times` repeats the click."""
+    controls, e.g. an unrotated POT-HG: dx_grid=-1.27, dy_grid=1.05 raises the wiper, dy_grid=-1.05 lowers it,
+    about one step per 0.2 s of hold_seconds; `times` repeats the click."""
     s = _require_session()
     if s.sim_state() != "running":
         raise ValueError("the simulation must be running (sim_start)")
@@ -603,6 +603,13 @@ def sim_click(ref: str, hold_seconds: float = 0.3, settle_seconds: float = 0.8, 
                                                comp["origin"][1] + dy_grid * schematic.GRID))
     else:
         (x, y), _ = _part_screen_box(s, ref)
+    if not getattr(s, "_canvas_primed", False):
+        # the first press after launch was seen to get lost (focus goes to the canvas first): click an
+        # empty corner of the editing canvas, outside the sheet, once per session
+        l, t, r, b = gui.win32gui.GetWindowRect(s.edit_window())
+        s.real_click(l + 4, t + 4, hold=0.05)
+        time.sleep(0.3)
+        s._canvas_primed = True
     for _ in range(max(times, 1)):
         s.real_click(x, y, hold=hold_seconds)
         time.sleep(0.15)

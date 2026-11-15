@@ -28,6 +28,10 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   (checked with a real screen grab, not only PrintWindow). Check analog outputs with the template's DC
   voltmeters instead: they average a fast signal (lab7's 6 + 6 sin shows 5.99 V), so for evidence build a
   slowed-down copy of the program (about 0.7 s per sample) and sample the meter with screenshot_part.
+- **8255 log:** the simulation log shows only the power-on control word (`CTRLW SET TO 9B`), not the one your
+  program writes; read it in debug_window("8255 Internal Status") instead.
+- **Debug panels** (Registers, Memory Dump, Variables) open docked at the bottom of the Source Code tab;
+  debug_window finds them by name and returns their picture.
 - **Virtual Terminal:** raw bytes show as characters; `terminal_mode("Hex Display Mode")` switches to hex.
 - **8086 model:** internal memory 0x00000-0x0FFFF (DBG_MEM_SIZE); the program loads at 0800:0000, so the
   interrupt vector table at 0000:0000 is writable RAM. Keep a stack inside your own segment.

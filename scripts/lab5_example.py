@@ -74,6 +74,7 @@ async def main():
                     raise RuntimeError(f"{tool}{args}: {res.content[0].text}")
                 return res.structured_content or json.loads(res.content[0].text)
 
+            await call("proteus_background", on=False)      # pressing the buttons uses the mouse
             await call("project_open", path=TEMPLATE, name=P, overwrite=True)
             # address lines: 8255 A0/A1 from latch Q1/Q2; RESET to ground
             await call("schematic_connect", project=P, a="U2.Q1", b="U3.A0")

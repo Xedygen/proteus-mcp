@@ -119,6 +119,8 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `terminal_mode` | Virtual Terminal options during a run, e.g. Hex Display Mode (real mouse) |
 | `lab_list` | Lab folders with their PDF, template and reference solutions |
 | `schematic_labels` | Offline list of net names (terminals, wire labels) and the pins wired to them |
+| `schematic_check` | Offline: unconnected pins per part, terminals whose partner is missing or misspelled |
+| `dialog_answer` | Click a button in a Proteus dialog the server does not answer itself |
 
 ## Use it on a lab PDF
 
