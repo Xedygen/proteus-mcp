@@ -65,8 +65,9 @@ def referenced_files(project: str | Path) -> list[Path]:
     FILE property (00.bin).  Proteus resolves those against the project's folder, so they travel with it."""
     project = Path(project)
     blob = b"".join(v for k, v in entries(project).items() if k.upper().endswith((".DSN", ".CDB")))
+    blob_lower = blob.lower()          # Windows names are case-insensitive: FILE=00.BIN is 00.bin
     out = []
     for f in sorted(project.parent.iterdir()):
-        if f.is_file() and f.suffix.lower() not in (".pdsprj", ".pdf", ".workspace", ".sdf", ".source")                 and f.name.encode() in blob:
+        if f.is_file() and f.suffix.lower() not in (".pdsprj", ".pdf", ".workspace", ".sdf", ".source")                 and f.name.lower().encode() in blob_lower:
             out.append(f)
     return out

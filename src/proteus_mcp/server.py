@@ -175,6 +175,8 @@ def project_open(path: str, name: str | None = None, overwrite: bool = False) ->
     dst = PROJECTS / f"{stem}.pdsprj"
     origin = PROJECTS / f"{stem}.source"
     reused = dst.exists() and not overwrite
+    if dst.exists() and overwrite and _session is not None and _session.alive() and _session.project.resolve() == dst.resolve():
+        raise ValueError(f"{stem} is open in Proteus; call proteus_close before overwriting it")
     if reused and origin.exists() and origin.read_text(encoding="utf-8") != str(src.resolve()):
         raise ValueError(f"workspace project {stem} is a copy of {origin.read_text(encoding='utf-8')}; pass "
                          "another name or overwrite=True")
@@ -291,6 +293,15 @@ def schematic_add_part(project: str, like: str, x_grid: float, y_grid: float, ro
     return schematic.add_part(_closed(project), like, x_grid, y_grid, rotation, value, ref)
 
 
+def _stop(s: gui.Session) -> None:
+    """Close a Proteus this server started for a one-off job, killing it if it will not close."""
+    if s.alive():
+        try:
+            s.close()
+        except gui.GuiError:
+            s.kill()   # only ever this server's own Proteus process
+
+
 @mcp.tool()
 def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     """Place NEW device types from Proteus's libraries (e.g. a 74HC4078 or 4002 gate the template lacks).
@@ -307,9 +318,10 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     before = {c["ref"] for c in schematic.components(p, with_pins=False)}
     sheet = schematic.load(p)
     size = sheet.size()
+    snapshot = p.read_bytes()           # restored if placement fails, so no stray parts are left behind
+    todo = list(devices)
     s = gui.Session.launch(p)
     try:
-        todo = list(devices)
         for _attempt in range(3):          # a drop click occasionally misses; check the saved file and retry
             for d in todo:
                 frame = s.sheet_frame(size)
@@ -327,16 +339,16 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
             todo = missing
             if not todo:
                 break
-    finally:
-        if s.alive():
-            try:
-                s.close()
-            except gui.GuiError:
-                s.kill()   # only ever this server's own Proteus process
+    except BaseException:
+        _stop(s)
+        p.write_bytes(snapshot)
+        raise
+    _stop(s)
     placed = [c for c in schematic.components(p) if c["ref"] not in before]
     if todo:
+        p.write_bytes(snapshot)
         raise gui.GuiError(f"asked for {[d['device'] for d in devices]} but only "
-                           f"{[c['ref'] + ' ' + c['device'] for c in placed]} appeared after saving")
+                           f"{[c['ref'] + ' ' + c['device'] for c in placed]} appeared after saving; the project was restored to its state before the call")
     return placed
 
 

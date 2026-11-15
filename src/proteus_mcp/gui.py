@@ -786,7 +786,8 @@ class Session:
             while time.time() < deadline and menu is None:
                 found = []
                 win32gui.EnumWindows(lambda w, _: found.append(w) if win32gui.GetClassName(w) == "#32768"
-                                     and win32gui.IsWindowVisible(w) else None, None)
+                                     and win32gui.IsWindowVisible(w)
+                                     and win32process.GetWindowThreadProcessId(w)[1] == self.pid else None, None)
                 menu = found[0] if found else None
                 time.sleep(0.1)
             if menu is None:
@@ -808,7 +809,9 @@ class Session:
                     raise GuiError(f"no menu item {item!r}; items: {items}")
                 return {"item": item, "was_on": checked, "on": on, "items": items}
             rect = ctypes.wintypes.RECT()
-            user32.GetMenuItemRect(None, hm, index, ctypes.byref(rect))
+            if not user32.GetMenuItemRect(None, hm, index, ctypes.byref(rect)) or rect.right <= rect.left:
+                win32gui.PostMessage(menu, win32con.WM_KEYDOWN, win32con.VK_ESCAPE, 0)
+                raise GuiError(f"could not locate the menu item {item!r} on screen; not clicking")
             x, y = (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
             win32api.SetCursorPos((x, y))
             time.sleep(0.2)
