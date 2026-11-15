@@ -200,7 +200,9 @@ the passing result in `docs/evidence/`.
       work/e2e/prompt_*.txt):
       - [x] lab5 (2026-11-16): all 8 keys show their digit; 41 turns after a restart. It found 4 tool problems,
             all fixed (first sim_click lost, docked debug panels, clash message, 8255 log note).
-      - [ ] lab8 (running)
+      - [x] lab8 (2026-11-16): 116 turns, about 2.3 USD, 7 min. Pot turns gave 03 87 AB BF FF. Fixed from it:
+            placement now corrects Proteus's drop offset and redoes parts dropped on wires; sim_start while
+            running. Open: Memory Dump only shows its first page; generators absent from the netlist.
       - [ ] lab6, odev2
       - Note: the advisor server tool hangs headless sessions; run with --disallowedTools advisor.
 
