@@ -502,6 +502,23 @@ def sim_status() -> dict:
 
 
 @mcp.tool()
+def dialog_answer(button: str, title: str | None = None) -> dict:
+    """Click a button (e.g. "OK", "No", "Cancel") in an open Proteus dialog, for dialogs the tools do not
+    answer themselves (an UnknownDialog error names them; sim_status lists them). `title` picks the dialog
+    when several are open."""
+    s = _require_session()
+    ds = [d for d in s.dialogs() if title is None or d["title"] == title]
+    if not ds:
+        raise ValueError(f"no open dialog{' titled ' + repr(title) if title else ''}; open: {s.dialogs()}")
+    d = ds[0]
+    if button not in [b.replace("&", "") for b in d["buttons"]]:
+        raise ValueError(f"dialog {d['title']!r} has no button {button!r}; buttons: {d['buttons']}")
+    gui._click_button(d["hwnd"], button, post=True)
+    time.sleep(0.8)
+    return {"clicked": button, "dialog": d["title"], "still_open": s.dialogs()}
+
+
+@mcp.tool()
 def sim_log() -> list[dict]:
     """Rows of the Simulation Log (messages and the part that produced them)."""
     return _require_session().sim_log()
