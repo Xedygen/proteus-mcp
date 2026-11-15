@@ -164,11 +164,11 @@ the passing result in `docs/evidence/`.
       docs/evidence/lab5_buttons.png).
 - [x] 2025 lab6 (scripts/lab6_example.py, docs/evidence/lab6_terminals.png: DEFNODEF): 8251 at I/O 0158H; `A B C 0` gives `DEF`, `K L 0` gives `NO`, `A 1 B ? C n 0` gives `DEF`
       on terminal 2. Remember `SHR AL,1` after reading the 8251 data port.
-- [~] 2025 lab7 part 1 (scripts/lab7_example.py): labels renamed, DAC at 200H verified in the netlist, program
-      runs without simulation errors, voltmeter on the output averages 5.99 V (6 V expected). Scope trace not yet
-      captured: the scope only draws while visible on screen; check with background mode off.
-- [ ] 2025 lab8: 8259 vectors 51H and 52H, five ADC samples printed as hex bytes on the terminal.
-- [ ] 2025 odev2: ROM at 20000H, RAM at 60000H, `00.bin` ... `11.bin` loaded, RAM00 / RAM01 contents match
+- [x] 2025 lab7 part 1 (scripts/lab7_example.py): labels renamed, DAC at 200H verified in the netlist, program
+      runs without simulation errors; a slowed copy shows the sine on the voltmeter (docs/evidence/lab7_dac_slow.png).
+      The scope draws nothing on this install, not even for the student solution.
+- [x] 2025 lab8 (scripts/lab8_example.py, docs/evidence/lab8_pot_terminal.png): 8259 vectors 51H and 52H, samples printed as hex, pot turns change them.
+- [x] 2025 odev2 (scripts/odev2_example.py, docs/evidence/odev2_ram.png): ROM at 20000H, RAM at 60000H, `00.bin` ... `11.bin` loaded, RAM00 / RAM01 contents match
       the sample output in the PDF.
 - [ ] 2025 lab7 part 2 and the 2024 labs if time allows.
 - [ ] One circuit that is not from a template, to cover the original "draw schematics" brief: for example
@@ -212,5 +212,5 @@ place-devices verification, generator identity clash.
 - [x] Turning background mode off brings hidden popups back on screen.
 - [x] add_part prefix for multi-gate parts. (Rotation still leaves labels unrotated.)
 - [ ] _check_clear misses a corner landing mid-wire; parts with unparsable pin tables are unprotected.
-- [ ] Missing tools: dialog_answer. (schematic_labels added; ROM images now travel with the project.)
-- [ ] Docs: FORMAT.md stale "6 of 27 parse" section and NUL bytes near line 121.
+- [x] dialog_answer, schematic_labels added; ROM images travel with the project.
+- [x] Docs: FORMAT.md stale "6 of 27 parse" section and NUL bytes near line 121.
