@@ -9,6 +9,7 @@ KNOWN list are answered automatically, anything else raises UnknownDialog with t
 from __future__ import annotations
 
 import ctypes
+import ctypes.wintypes
 import io
 import re
 import subprocess
@@ -125,6 +126,18 @@ def png_bytes(img: Image.Image, max_width: int | None = None) -> bytes:
     buf = io.BytesIO()
     img.save(buf, "PNG", optimize=True)
     return buf.getvalue()
+
+
+def _listview_rows(lv: int) -> list[dict]:
+    """Message / source rows of a two-column SysListView32 (simulation log, compiler errors)."""
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from pywinauto.controls.common_controls import ListViewWrapper
+        from pywinauto.controls.hwndwrapper import HwndWrapper
+        w = ListViewWrapper(HwndWrapper(lv).element_info)
+        return [{"message": w.get_item(i, 0).text(), "source": w.get_item(i, 1).text()}
+                for i in range(w.item_count())]
 
 
 @dataclass
@@ -423,16 +436,23 @@ class Session:
         if lv_parent is None:
             raise GuiError("Simulation Log popup not found")
         lv = next((c for c, k, _ in _children(lv_parent) if k == "SysListView32"), None)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            from pywinauto.controls.common_controls import ListViewWrapper
-            from pywinauto.controls.hwndwrapper import HwndWrapper
-            w = ListViewWrapper(HwndWrapper(lv).element_info)
-            rows = [{"message": w.get_item(i, 0).text(), "source": w.get_item(i, 1).text()}
-                    for i in range(w.item_count())]
+        rows = _listview_rows(lv)
         if resume:
             self.sim("start")
         return rows
+
+    def compiler_errors(self) -> list[dict]:
+        """Rows of the NETLIST COMPILER ERRORS tab Proteus opens when a simulation fails to start
+        (e.g. "Duplicate part reference"), or [] when there is none."""
+        for c, k, _ in _children(self.main):
+            if k == "SysListView32":
+                try:
+                    rows = _listview_rows(c)
+                except Exception:
+                    continue
+                if any("netlist compiler" in r["message"].lower() for r in rows):
+                    return rows
+        return []
 
     # ----- netlist -------------------------------------------------------------------------
     def netlist(self, out_path: str | Path, timeout: float = 30.0) -> Path:
@@ -595,7 +615,7 @@ class Session:
         time.sleep(hold)
         win32gui.PostMessage(canvas, win32con.WM_LBUTTONUP, 0, lp)
 
-    def real_click(self, x: int, y: int, hold: float = 0.3) -> None:
+    def real_click(self, x: int, y: int, hold: float = 0.3, button: str = "left") -> None:
         """Real mouse press at screen pixel (x, y) on this Proteus.  Proteus actuators read the real mouse,
         so posted messages do not work.  The window is raised above all others first (topmost on, then off,
         which needs no foreground rights), and the click is refused if anything else is under the point."""
@@ -626,12 +646,15 @@ class Session:
             win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, 1, 0, 0, 0)
             win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, -1, 0, 0, 0)
             time.sleep(0.15)
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            down, up = ((win32con.MOUSEEVENTF_RIGHTDOWN, win32con.MOUSEEVENTF_RIGHTUP) if button == "right"
+                        else (win32con.MOUSEEVENTF_LEFTDOWN, win32con.MOUSEEVENTF_LEFTUP))
+            win32api.mouse_event(down, 0, 0, 0, 0)
             time.sleep(max(hold, 0.08))
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            win32api.mouse_event(up, 0, 0, 0, 0)
             time.sleep(0.1)
-            l, t, r, b = win32gui.GetWindowRect(self.main)
-            win32api.SetCursorPos((l + 40, t + 10))       # title bar: off the drawing
+            if button == "left":
+                l, t, r, b = win32gui.GetWindowRect(self.main)
+                win32api.SetCursorPos((l + 40, t + 10))   # title bar: off the drawing
         finally:
             win32gui.SetWindowPos(self.main, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, flags)
 
@@ -703,6 +726,56 @@ class Session:
     def terminal_windows(self) -> list[int]:
         """Top-level Virtual Terminal popup windows (they exist while a simulation runs)."""
         return [h for h in _windows(self.pid) if win32gui.GetWindowText(h).startswith("Virtual Terminal")]
+
+    def terminal_mode(self, item: str = "Hex Display Mode", on: bool = True, window: int | None = None) -> dict:
+        """Set a check item of a Virtual Terminal's right-click menu (e.g. "Hex Display Mode", "Echo Typed
+        Characters") with real mouse clicks.  Returns the menu items seen and the item's state before."""
+        h = window or (self.terminal_windows() or [None])[0]
+        if h is None:
+            raise GuiError("no Virtual Terminal window (is the simulation running?)")
+        l, t, r, b = win32gui.GetWindowRect(h)
+        win32gui.SetWindowPos(h, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+        try:
+            self.real_click((l + r) // 2, (t + b) // 2, hold=0.1, button="right")
+            deadline = time.time() + 3
+            menu = None
+            while time.time() < deadline and menu is None:
+                found = []
+                win32gui.EnumWindows(lambda w, _: found.append(w) if win32gui.GetClassName(w) == "#32768"
+                                     and win32gui.IsWindowVisible(w) else None, None)
+                menu = found[0] if found else None
+                time.sleep(0.1)
+            if menu is None:
+                raise GuiError("the terminal's context menu did not open")
+            hm = win32gui.SendMessage(menu, 0x01E1, 0, 0)          # MN_GETHMENU
+            items, index, checked = [], None, None
+            for i in range(user32.GetMenuItemCount(hm)):
+                buf = ctypes.create_unicode_buffer(256)
+                user32.GetMenuStringW(hm, i, buf, 256, win32con.MF_BYPOSITION)
+                name = buf.value.replace("&", "").split("	")[0]
+                if name:
+                    items.append(name)
+                if name.lower() == item.lower():
+                    index = i
+                    checked = bool(user32.GetMenuState(hm, i, win32con.MF_BYPOSITION) & win32con.MF_CHECKED)
+            if index is None or checked == on:
+                win32gui.PostMessage(menu, win32con.WM_KEYDOWN, win32con.VK_ESCAPE, 0)
+                if index is None:
+                    raise GuiError(f"no menu item {item!r}; items: {items}")
+                return {"item": item, "was_on": checked, "on": on, "items": items}
+            rect = ctypes.wintypes.RECT()
+            user32.GetMenuItemRect(None, hm, index, ctypes.byref(rect))
+            x, y = (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
+            win32api.SetCursorPos((x, y))
+            time.sleep(0.2)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            time.sleep(0.08)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            time.sleep(0.3)
+            return {"item": item, "was_on": checked, "on": on, "items": items}
+        finally:
+            win32gui.SetWindowPos(h, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
+                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
 
     def terminal_type(self, text: str, delay: float = 0.08, windows: list[int] | None = None) -> int:
         """Type `text` into Virtual Terminal windows by posting WM_CHAR (no focus needed).  Returns the

@@ -215,7 +215,6 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     if kind.encode() + b"\0" not in library and bytes([len(kind)]) + kind.encode() not in library:
         raise dsn.DsnError(f"{kind} is not in this file's embedded library; place one in Proteus first")
     out = p["out"]                                   # the side the pin faces, from the pin record
-    t = [p["xy"][0] + distance_grid * GRID * out[0], p["xy"][1] + distance_grid * GRID * out[1]]
     if kind in ("$TERDEFAULT", "$TERBUS"):
         facing = {(-1, 0): "left", (1, 0): "right", (0, 1): "up", (0, -1): "down"}[tuple(out)]
         if kind == "$TERBUS" and facing not in ("left", "right"):
@@ -223,8 +222,16 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     else:
         facing = None
     transform, conn, label_off, label_tf = _TERMINALS[(kind, facing)]
-    origin = [t[0] - conn[0], t[1] - conn[1]]
-    _check_clear(sheet, [p["xy"], t, origin], [p["xy"]])
+    # a power/ground symbol's body sticks out sideways, so next to a neighbour's terminal step further out
+    for distance in (distance_grid, distance_grid + 2, distance_grid + 4):
+        t = [p["xy"][0] + distance * GRID * out[0], p["xy"][1] + distance * GRID * out[1]]
+        origin = [t[0] - conn[0], t[1] - conn[1]]
+        try:
+            _check_clear(sheet, [p["xy"], t, origin], [p["xy"]])
+            break
+        except dsn.DsnError:
+            if distance == distance_grid + 4:
+                raise
     template = next((o for o in sheet.objects if o["type"] == "terminal"), None)
     if template is None:
         raise dsn.DsnError("no terminal in this file to copy the label style from")
@@ -244,6 +251,73 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     sheet.reschedule()
     save(project, sheet)
     return {"pin": pin, "terminal": kind, "net": net, "terminal_grid": [t[0] / GRID, t[1] / GRID]}
+
+
+def _next_identity(sheet: dsn.Sheet) -> int:
+    """Components and instruments share one identity space (an instrument's u16 field); Proteus derives
+    references from it, so a clash shows up as "Duplicate part reference" at simulation start."""
+    used = [o["identity"] for o in sheet.components()]
+    used += [o["u16"] for o in sheet.objects if o["type"] == "instrument"]
+    return max(used + [0]) + 1
+
+
+_GEN_STYLE = (b"0\xe0\x03\x00\xc0\x19\x03\x00\x00\x00\xc0\x00\x01 \xff\x01Default Font\x00GENERATOR LABEL\x00\x00\x00\x00\x00",
+              b"0\xe0\x03\x00\xc0\x19\x03\x00\x00\x00\x00\x00\x01 \xff\x01Default Font\x00PROPERTIES\x00\x00\x00\x00\x00")
+
+
+def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str | None = None,
+                  distance_grid: int = 3) -> dict:
+    """Attach a digital clock generator ($DCLOCK0, square wave starting low) to an unconnected left- or
+    right-side pin, e.g. the 8251's TxC/RxC (9600 Hz for 9600 baud at x1) or the ADC0804's CLK IN.
+    The generator's name labels its net, so each generator needs a distinct name (default "REF(PIN)").
+    Its properties live in ROOT.DSN, so this also works without ROOT.CDB changes."""
+    sheet = load(project)
+    ref, pin_name = pin.split(".", 1)
+    comp, p = find_pin(sheet, ref, pin_name)
+    if p["connected"]:
+        raise dsn.DsnError(f"{pin} already has a wire")
+    if p["hidden"] or p["bus"]:
+        raise dsn.DsnError(f"{pin} is a hidden or bus pin")
+    out = tuple(p["out"])
+    if out not in ((-1, 0), (1, 0)):
+        raise dsn.DsnError("generators on top/bottom pins are not supported; use a terminal and a "
+                           "generator on a left/right pin elsewhere")
+    name = name or f"{sheet.name_of(comp)}({p['name']})"
+    used = {o["labels"][0]["text"] for o in sheet.objects if o["type"] == "instrument"}
+    if name in used:
+        raise dsn.DsnError(f"a generator named {name} exists already")
+    mirror = 0 if out == (-1, 0) else 1                # mirror 0: body on the left, output to the right
+    origin = [p["xy"][0] + distance_grid * GRID * out[0], p["xy"][1]]
+    _check_clear(sheet, [p["xy"], origin], [p["xy"]])
+    wire_tpl = next((w for w in sheet.wires() if w["flags"] == 0), None)
+    if wire_tpl is None:
+        raise dsn.DsnError("no existing wire to copy the style from")
+    side = 1 if mirror else -1
+    label_tf = "000000000" if mirror else "000001000"
+    props = (f"{{INIT=LOW}}\n{{START=0}}\n{{COUNT=-1}}\n{{CLOCK={frequency_hz:g}}}\n"
+             f"{{MANUALEDITS=FALSE}}\n{{HIDDENPROPS=TRUE}}\n").encode()
+    ident = _next_identity(sheet)
+    ids = {o["id"] for o in sheet.objects if o["type"] == "instrument"}
+    n = ident
+    while f"M{n:08X}" in ids:
+        n += 1
+    key = sheet.new_key()
+    gen = {"type": "instrument", "kind": 187, "origin": origin, "transform": struct.pack("<hH", 0, mirror),
+           "u16": ident, "id": f"M{n:08X}", "device": "$DCLOCK0",
+           "labels": [{"text": name, "xy": [origin[0] + side * 482600, origin[1] + 381000],
+                       "transform": bytes.fromhex(label_tf + "800"), "style": _GEN_STYLE[0]},
+                      {"text": "", "xy": [origin[0] + side * 482600, origin[1] + 254000],
+                       "transform": bytes.fromhex(label_tf + "400"), "style": _GEN_STYLE[1]}],
+           "props_n": len(props), "props": props, "props_inline": False, "flags": 0, "pointers": [key],
+           "tail": b"\0\0\0\0", "tail_c": 0, "blob_n": 5, "blob": b"\0"}
+    sheet.objects.append(gen)
+    sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": wire_tpl["style"],
+                          "labels": [], "points": [p["xy"], origin]})
+    comp["pointers"][p["slot"]] = key
+    sheet.reschedule()
+    save(project, sheet)
+    return {"pin": pin, "generator": name, "frequency_hz": frequency_hz,
+            "generator_grid": [origin[0] / GRID, origin[1] / GRID]}
 
 
 _ROTATIONS = {0: 0, 90: 900, 180: 1800, 270: 2700}
@@ -275,7 +349,7 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
         new["transform"] = struct.pack("<hH", _ROTATIONS[rotation], mirror)
     if value is not None:
         new["labels"][1]["text"] = value
-    new["identity"] = max(o["identity"] for o in sheet.components()) + 1
+    new["identity"] = _next_identity(sheet)
     used = {o["labels"][0]["text"].upper() for o in sheet.components()}
     if ref is None:
         # Proteus re-annotates a reference whose prefix does not suit the device (N1 for a NOT gate became

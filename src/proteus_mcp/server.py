@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from mcp.server.mcpserver import Image, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from . import doctor, firmware, gui, paths, pdsprj, schematic
 from .netlist import parse as parse_netlist
@@ -35,6 +36,28 @@ Every path argument may be absolute; projects are referred to afterwards by the 
 
 mcp = MCPServer("proteus", instructions=INSTRUCTIONS)
 _session: gui.Session | None = None
+_register = mcp.tool
+
+
+def _tool(*args, **kwargs):
+    """mcp.tool, but any exception reaches the client with its message (the SDK reports only
+    "Error executing tool X" for anything that is not a ToolError, which leaves the model guessing)."""
+    import functools
+
+    def decorate(fn):
+        @functools.wraps(fn)
+        def wrapper(*a, **k):
+            try:
+                return fn(*a, **k)
+            except ToolError:
+                raise
+            except Exception as e:
+                raise ToolError(f"{type(e).__name__}: {e}") from e
+        return _register(*args, **kwargs)(wrapper)
+    return decorate
+
+
+mcp.tool = _tool
 
 
 # ----- helpers ------------------------------------------------------------------------------
@@ -268,6 +291,15 @@ def schematic_add_terminal(project: str, pin: str, net: str, distance_grid: int 
 
 
 @mcp.tool()
+def schematic_add_generator(project: str, pin: str, frequency_hz: float, name: str | None = None,
+                            distance_grid: int = 3) -> dict:
+    """Attach a digital clock generator (square wave) to an unconnected left/right pin, e.g. the 8251's
+    $TxC$ / $RxC$ at 9600 Hz (mode x1 -> 9600 baud). Each generator needs its own name (default "REF(PIN)").
+    Not needed for an ADC0804 whose INTCLK property is 1 (internal clock)."""
+    return schematic.add_generator(_closed(project), pin, frequency_hz, name, distance_grid)
+
+
+@mcp.tool()
 def schematic_rename_label(project: str, old: str, new: str) -> dict:
     """Rename all terminals / wire labels named `old` to `new`, e.g. YA6 -> $IO1$ (a $..$ name is written
     with an overbar). Same-named terminals and labels are connected, so this changes which net they join."""
@@ -331,6 +363,11 @@ def sim_start(wait_seconds: float = 3.0) -> dict:
     the 8086 loaded has the size of the EXE stored in the project."""
     s = _require_session()
     state = s.sim("start", settle=max(wait_seconds, 1.0))
+    if s.sim_state() not in ("running", "paused"):
+        errors = s.compiler_errors()
+        raise ToolError("simulation did not start" + (": " + "; ".join(
+            f"{r['message']} ({r['source']})" for r in errors) if errors else
+            " (no compiler errors found; check screenshot)"))
     log = s.sim_log()
     return {"state": s.sim_state(), "requested_state": state, "log": log,
             "firmware": _firmware_check(log, _expected_load(s.project))}
@@ -427,6 +464,20 @@ def terminal_type(text: str) -> dict:
     if not n:
         raise ValueError("no Virtual Terminal window is open")
     return {"typed": text, "terminals": n}
+
+
+@mcp.tool()
+def terminal_mode(item: str = "Hex Display Mode", on: bool = True, terminal: int = 0) -> dict:
+    """Switch a Virtual Terminal right-click option during a running simulation: "Hex Display Mode" (shows
+    received bytes as hex, as labs ask for raw data), "Echo Typed Characters", "Pause". `terminal` is the
+    index into the open terminal windows. Uses the real mouse (background mode must be off)."""
+    s = _require_session()
+    if s.sim_state() != "running":
+        raise ValueError("the simulation must be running (sim_start)")
+    windows = s.terminal_windows()
+    if terminal >= len(windows):
+        raise ValueError(f"only {len(windows)} Virtual Terminal window(s) open")
+    return s.terminal_mode(item, on, windows[terminal])
 
 
 @mcp.tool()
