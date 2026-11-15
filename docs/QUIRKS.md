@@ -43,8 +43,9 @@ reaches the bus peripherals:
 | Labcenter's `SAMPLES\Interactive Simulation\Animated Circuits\TTLClock` (TTL logic only, no CPU) | Works: display lit (`0:00`), counter pins animate. So digital simulation and the 7-segment model are fine; the fault is specific to the 8086 driving its bus. |
 
 All install files are dated February 2017 (PDS.EXE March 2017, SP2), so this is not an obvious mix of
-versions. The 74HC373 model is present in `MODELS\DIGITAL.LML`. Not yet done: the owner opening a project by
-hand and pressing Play, which separates "install" from "the way the MCP launches Proteus". Until one of the
+versions. The 74HC373 model is present in `MODELS\DIGITAL.LML`. **Owner's manual test (2026-11-15):** opening the lab5 solution by hand and pressing Play gives the same
+dark display and the identical log (`CTRLW SET TO 9B` only). So the fault is in this Proteus install, not in
+how the MCP starts or drives it. Until one of the
 sample projects shows output, no lab result can be verified by simulation on this machine.
 
 ## Things that do work (verified 2026-11-15)

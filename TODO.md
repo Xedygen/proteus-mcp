@@ -185,7 +185,9 @@ the passing result in `docs/evidence/`.
 - **Simulation does not produce any 8086 I/O on this install (blocks every lab check).** Even Labcenter's own
   8086 Demo Board sample shows nothing: the CPU runs, but peripherals never see a read or write. Details and
   evidence in `docs/QUIRKS.md`. Plain TTL logic samples do simulate, so the fault is in the 8086 side
-  (`MODELS\i8086.DLL` reports file version 7.5.21171). Please open `labs/2025/lab5/mert_guler/tasarım.pdsprj` by hand, press Play, and
+  (`MODELS\i8086.DLL` reports file version 7.5.21171). **Confirmed by the owner on 2026-11-15:** a manual
+  run shows the same dark display and log, so this install needs a clean reinstall from a properly licensed
+  installer before any lab can be checked by simulation. (Original request, kept for reference:) Please open `labs/2025/lab5/mert_guler/tasarım.pdsprj` by hand, press Play, and
   check whether the 7-segment display shows a digit. If it stays dark, Proteus needs a clean reinstall from a
   properly licensed installer; the MCP cannot fix the install.
 
