@@ -15,7 +15,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import Image, MCPServer
 
-from . import doctor, firmware, gui, paths, pdsprj
+from . import doctor, firmware, gui, paths, pdsprj, schematic
 from .netlist import parse as parse_netlist
 
 PROJECTS = paths.WORK_DIR / "projects"
@@ -168,6 +168,45 @@ def firmware_build(project: str, source: str | None = None) -> dict:
         pdsprj.replace(p, {fp[0]: firmware.normalise_source(text), fp[1]: res.exe})
         out["stored"] = {"source": fp[0], "exe": fp[1], "load_bytes": _exe_load_size(res.exe)}
     return out
+
+
+# ----- schematic (offline edits of ROOT.DSN) ---------------------------------------------------------
+def _closed(project: str) -> Path:
+    p = _project(project)
+    if _session is not None and _session.alive() and _session.project.resolve() == p.resolve():
+        raise ValueError("this project is open in Proteus; call proteus_close first (Proteus keeps its own copy)")
+    return p
+
+
+@mcp.tool()
+def schematic_components(project: str, with_pins: bool = True, ref: str | None = None) -> list[dict]:
+    """Parts on the schematic: reference (unannotated parts as DEVICE#ID, the same names the netlist uses),
+    value, device, position in grid units (0.1 inch, y grows upwards), properties, and each pin's name,
+    number, grid position and whether a wire is attached. Pass `ref` to get one part."""
+    out = schematic.components(_project(project), with_pins)
+    return [c for c in out if c["ref"].upper() == ref.upper()] if ref else out
+
+
+@mcp.tool()
+def schematic_connect(project: str, a: str, b: str, via_x_grid: float | None = None) -> dict:
+    """Draw a wire between two unconnected pins, e.g. a="U2.Q1", b="U3.A0" (pin by name or number).
+
+    The wire is routed orthogonally through a vertical column at `via_x_grid` (default: halfway). Written
+    straight into the project file; Proteus must not have the project open. Check the result with
+    proteus_launch + net_of."""
+    return schematic.connect(_closed(project), a, b, via_x_grid)
+
+
+@mcp.tool()
+def schematic_set_property(project: str, ref: str, key: str, value: str) -> dict:
+    """Set a component property such as CLOCK (8086), or the ROM image file of a 27C128."""
+    return schematic.set_property(_closed(project), ref, key, value)
+
+
+@mcp.tool()
+def schematic_set_value(project: str, ref: str, value: str) -> dict:
+    """Change a component's value text (e.g. a resistor's 10k)."""
+    return schematic.set_value(_closed(project), ref, value)
 
 
 # ----- Proteus process ---------------------------------------------------------------------------

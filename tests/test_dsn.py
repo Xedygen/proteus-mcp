@@ -22,3 +22,54 @@ def test_round_trip(path):
     sheet = dsn.parse(data)
     assert sheet.components(), "no components found"
     assert sheet.build() == data
+
+
+@pytest.mark.skipif(not SAMPLES, reason="labs/ not present")
+@pytest.mark.parametrize("path", SAMPLES, ids=lambda p: p.parent.name + "/" + p.stem)
+def test_resize_relocates(path):
+    """Grow one wire by a point: every later pointer and the sheet directory must follow."""
+    data = _dsn(path)
+    sheet = dsn.parse(data)
+    wire = sheet.wires()[0]
+    wire["points"].append(list(wire["points"][-1]))
+    out = sheet.build()
+    assert len(out) == len(data) + 8
+    again = dsn.parse(out)            # pointers and the end-of-sheet check still hold
+    assert len(again.objects) == len(sheet.objects)
+    import struct
+    directory = struct.unpack_from("<I", out, again.circuit - 4)[0]
+    second = out.find(dsn.SIGNATURE, again.circuit + 1)
+    assert out[directory:directory + 2] == data[struct.unpack_from("<I", data, sheet.circuit - 4)[0]:][:2]
+    assert struct.pack("<I", second) in out[directory:directory + 64]
+
+
+LAB5 = REPO / "labs" / "2025" / "lab5" / "taslak.pdsprj"
+
+
+@pytest.mark.skipif(not LAB5.exists(), reason="labs/ not present")
+def test_connect_and_pin_geometry(tmp_path):
+    from proteus_mcp import devices, pdsprj, schematic
+    proj = pdsprj.copy(LAB5, tmp_path / "t.pdsprj")
+    schematic.connect(proj, "U2.Q1", "U3.A0")
+    sheet = schematic.load(proj)
+    _, q1 = devices.find_pin(sheet, "U2", "Q1")
+    _, a0 = devices.find_pin(sheet, "U3", "A0")
+    assert q1["connected"] and a0["connected"]
+    wire = next(w for w in sheet.wires() if {tuple(w["points"][0]), tuple(w["points"][-1])}
+                == {tuple(q1["xy"]), tuple(a0["xy"])})
+    assert all(a[0] == b[0] or a[1] == b[1] for a, b in zip(wire["points"], wire["points"][1:]))
+    with pytest.raises(dsn.DsnError):
+        schematic.connect(proj, "U2.Q1", "U3.A1")   # Q1 already has a wire
+
+
+@pytest.mark.skipif(not SAMPLES, reason="labs/ not present")
+def test_every_connected_pin_meets_its_wire():
+    from proteus_mcp import devices
+    for path in SAMPLES:
+        sheet = dsn.parse(_dsn(path))
+        wires = {w["start"]: w for w in sheet.wires()}
+        for comp in sheet.components():
+            for pin, ptr in zip(devices.pins(sheet, comp), comp["pointers"]):
+                if ptr:
+                    w = wires[ptr]
+                    assert pin["xy"] in (w["points"][0], w["points"][-1]), (path.name, sheet.name_of(comp), pin["name"])

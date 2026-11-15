@@ -255,7 +255,7 @@ def read_object(data: bytes, r: Reader) -> dict:
         return read_junction(r)
     if k == 0x10:
         return read_terminal(r)
-    if k == 0x20:
+    if k in (0x20, 0x21):
         return read_graphic(r)
     if k == 0x02:
         return read_script(r)
@@ -276,10 +276,22 @@ class Sheet:
         return [o for o in self.objects if o["type"] == "component"]
 
     def component(self, ref: str) -> dict:
+        """By reference (U3), or for unannotated parts by Proteus's netlist name DEVICE#ID (RES#001D), where
+        ID is the record's identity in hex."""
         for o in self.components():
-            if o["labels"][0]["text"].upper() == ref.upper():
+            if o["labels"][0]["text"] and o["labels"][0]["text"].upper() == ref.upper():
                 return o
+        if "#" in ref:
+            device, ident = ref.rsplit("#", 1)
+            for o in self.components():
+                if o["device"].upper() == device.upper() and o["identity"] == int(ident, 16):
+                    return o
         raise DsnError(f"no component {ref!r}")
+
+    @staticmethod
+    def name_of(o: dict) -> str:
+        """The name Proteus's netlist uses for a component: its reference, or DEVICE#ID when unannotated."""
+        return o["labels"][0]["text"] or f"{o['device']}#{o['identity']:04X}"
 
     def wires(self) -> list[dict]:
         return [o for o in self.objects if o["type"] == "wire"]
@@ -322,16 +334,74 @@ class Sheet:
         if not self.end < directory < len(self.data):
             raise DsnError(f"unexpected sheet directory pointer {directory:#x}")
         struct.pack_into("<I", out, dir_ptr_at, directory + delta)
+        # Directory (8.6): u16 count, then per sheet: u32, u8 length + name, u16, u32 sheet offset.
         r = Reader(self.data, directory)
         count = r.u16()
+        sheets = []
         for _ in range(count):
             r.u32()
-            r.read(r.u16())
+            r.read(r.u8())
             r.u16()
             at = r.offset
             sheet = r.u32()
+            if self.data[sheet:sheet + len(SIGNATURE)] != SIGNATURE:
+                raise DsnError(f"sheet directory entry points at {sheet:#x}, not at a sheet")
             if sheet > self.end:
                 struct.pack_into("<I", out, at + delta, sheet + delta)
+                sheets.append(sheet)
+        # Later sheets (e.g. the template sheet with the title block) move by delta; their own wire pointers
+        # are absolute too, so their records are rewritten in place with shifted pointers (same size).
+        ordered = sorted(set(sheets))
+        for i, sheet in enumerate(ordered):
+            begin = self.data.find(OBJECTS, sheet) + len(OBJECTS)
+            limit = ordered[i + 1] if i + 1 < len(ordered) else directory
+            # A pointer can only target a wire, and every wire record contains b"WIRE\0".  A sheet without
+            # one (typically the template sheet: frame, title block, notes) only moves, so its records,
+            # some of which are not decoded, are copied unchanged.
+            if b"WIRE\x00" not in self.data[begin:limit]:
+                continue
+            rr = Reader(self.data, begin)
+            objs = []
+            while self.data[rr.offset] != 0xFF:
+                objs.append(read_object(self.data, rr))
+            if not any(o.get("pointers") for o in objs):
+                continue
+            shifted = b"".join(WRITERS[o["type"]](o, lambda p: p + delta if p else 0) for o in objs)
+            if len(shifted) != rr.offset - begin:
+                raise DsnError("internal: later sheet changed size while relocating")
+            out[begin + delta:rr.offset + delta] = shifted
+
+    def reschedule(self) -> None:
+        """Put wires where ISIS writes them: right after the object holding a wire's second reference, in that
+        object's pointer order.  Wires referenced only once stay after the object they followed.  (This rule
+        reproduces the order of every two-ended wire in all 27 sample files.)"""
+        wires = {o["start"]: o for o in self.objects if o["type"] == "wire"}
+        anchor, last = {}, None
+        for o in self.objects:
+            if o["type"] != "wire":
+                last = id(o)
+            else:
+                anchor.setdefault(o["start"], last)
+        counts, out, placed = {}, [], set()
+        for o in self.objects:
+            if o["type"] == "wire":
+                continue
+            out.append(o)
+            for p in o.get("pointers", []):
+                if p:
+                    counts[p] = counts.get(p, 0) + 1
+                    if counts[p] == 2:
+                        out.append(wires[p])
+                        placed.add(p)
+            for k, a in anchor.items():
+                if a == id(o) and counts.get(k, 0) == 1 and k not in placed:
+                    out.append(wires[k])
+                    placed.add(k)
+        if len(placed) != len(wires):
+            raise DsnError("a wire is not referenced by any object")
+        if any(n > 2 for n in counts.values()):
+            raise DsnError("a wire has more than two ends; use a junction")
+        self.objects = out
 
     def new_key(self) -> int:
         """A wire key no pointer or existing wire uses (keys are only identifiers until build())."""
