@@ -470,6 +470,11 @@ def move_part(project: str | Path, ref: str, x_grid: float, y_grid: float) -> di
     clash = [p for p in pins(sheet, comp) if tuple(p["xy"]) in spots and not p["hidden"]]
     if clash:
         raise dsn.DsnError(f"pin {clash[0]['name']} would land on an existing connection point")
+    for p in pins(sheet, comp):
+        for w in sheet.wires():
+            if not p["hidden"] and any(_on_segment(tuple(p["xy"]), a, b) for a, b in zip(w["points"], w["points"][1:])):
+                raise dsn.DsnError(f"pin {p['name']} would land on an existing wire at "
+                                   f"{[p['xy'][0] / GRID, p['xy'][1] / GRID]}; pick another spot")
     save(project, sheet)
     return {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID],
             "pins": [{"name": p["name"], "grid": [p["xy"][0] / GRID, p["xy"][1] / GRID]}

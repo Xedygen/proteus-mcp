@@ -130,6 +130,26 @@ def png_bytes(img: Image.Image, max_width: int | None = None) -> bytes:
     return buf.getvalue()
 
 
+_JOB: list = []
+
+
+def _tie_to_server(proc: subprocess.Popen) -> None:
+    """Put a Proteus we started into a job object that ends it when this server process ends, however the
+    server dies (an MCP client restarting it, a crash): no invisible Proteus is left holding a project."""
+    try:
+        import win32job
+        if not _JOB:
+            job = win32job.CreateJobObject(None, "")
+            info = win32job.QueryInformationJobObject(job, win32job.JobObjectExtendedLimitInformation)
+            info["BasicLimitInformation"]["LimitFlags"] |= win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            win32job.SetInformationJobObject(job, win32job.JobObjectExtendedLimitInformation, info)
+            _JOB.append(job)
+        handle = win32api.OpenProcess(win32con.PROCESS_SET_QUOTA | win32con.PROCESS_TERMINATE, False, proc.pid)
+        win32job.AssignProcessToJobObject(_JOB[0], handle)
+    except Exception:
+        pass          # best effort: the atexit hook in the server still closes it on a normal exit
+
+
 def _listview_rows(lv: int) -> list[dict]:
     """Message / source rows of a two-column SysListView32 (simulation log, compiler errors)."""
     import warnings
@@ -170,6 +190,7 @@ class Session:
             startup.wShowWindow = 4          # SW_SHOWNOACTIVATE
         proc = subprocess.Popen([str(paths.PDS_EXE), str(project)], cwd=str(paths.PDS_EXE.parent),
                                 startupinfo=startup)
+        _tie_to_server(proc)
         s = cls(project, proc)
         try:
             s.wait_main(timeout)
