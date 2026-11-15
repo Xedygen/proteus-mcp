@@ -87,6 +87,22 @@ def proteus_doctor() -> dict:
 
 
 @mcp.tool()
+def proteus_background(on: bool | None = None) -> dict:
+    """Background mode (default on): Proteus starts without focus and stays off-screen, so the user can keep
+    working. Simulation, logs, netlists, screenshots and file edits work; sim_click and
+    schematic_place_devices need it off (they move the real mouse). Pass on=false/true to change it, or
+    nothing to read it. Applies to the next proteus_launch (and immediately to clicks)."""
+    if on is not None:
+        gui.BACKGROUND["on"] = bool(on)
+        if _session is not None and _session.alive():
+            if on:
+                _session.hide()
+            else:
+                gui.win32gui.ShowWindow(_session.main, gui.win32con.SW_MAXIMIZE)
+    return {"background": gui.BACKGROUND["on"]}
+
+
+@mcp.tool()
 def quirks() -> str:
     """Rules for writing lab code that builds and simulates here (MASM 5.10 limits, Proteus model quirks)."""
     return paths.QUIRKS_MD.read_text(encoding="utf-8")

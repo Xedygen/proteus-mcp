@@ -32,6 +32,12 @@ except Exception:
 
 user32 = ctypes.windll.user32
 
+import os as _os
+# Background mode: Proteus starts without activation and is moved off-screen, so it never covers the owner's
+# screen.  Everything driven by window messages and window rendering keeps working; real mouse clicks
+# (pressing parts, placing library devices) are refused.  PROTEUS_MCP_BACKGROUND=0 turns it off.
+BACKGROUND = {"on": _os.environ.get("PROTEUS_MCP_BACKGROUND", "1") != "0"}
+
 # Dialog texts that are answered automatically: (title, regex on the message text, button to press).
 KNOWN_DIALOGS = [
     ("Schematic Capture", re.compile(r'^Symbol "(?P<symbol>[^"]+)" used but not found in libraries\.$'), "OK"),
@@ -142,7 +148,13 @@ class Session:
         # reopen the project on another tab or with popups, so start clean.
         for ws in project.parent.glob(project.name + ".*.workspace"):
             ws.unlink(missing_ok=True)
-        proc = subprocess.Popen([str(paths.PDS_EXE), str(project)], cwd=str(paths.PDS_EXE.parent))
+        startup = None
+        if BACKGROUND["on"]:
+            startup = subprocess.STARTUPINFO()
+            startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startup.wShowWindow = 4          # SW_SHOWNOACTIVATE
+        proc = subprocess.Popen([str(paths.PDS_EXE), str(project)], cwd=str(paths.PDS_EXE.parent),
+                                startupinfo=startup)
         s = cls(project, proc)
         try:
             s.wait_main(timeout)
@@ -217,12 +229,23 @@ class Session:
                 quiet += 1
                 if quiet >= 4:  # stable for 2 s with no dialog
                     self.main = mains[0]
+                    if BACKGROUND["on"]:
+                        self.hide()
                     self.show_schematic()
                     return self.main
             else:
                 quiet = 0
             time.sleep(0.5)
         raise GuiError(f"main window for {stem} did not appear in {timeout}s; windows={self.windows()}")
+
+    def hide(self) -> None:
+        """Move the main window off-screen (to the right of all monitors) without activating it.  Its
+        rendering, menus and dialogs still work; it simply is not visible."""
+        l, t, r, b = win32gui.GetWindowRect(self.main)
+        right = user32.GetSystemMetrics(76) + user32.GetSystemMetrics(78)   # virtual screen left + width
+        flags = win32con.SWP_NOACTIVATE | win32con.SWP_NOZORDER | win32con.SWP_NOSIZE
+        win32gui.ShowWindow(self.main, 4)                                   # SW_SHOWNOACTIVATE (un-minimise)
+        win32gui.SetWindowPos(self.main, 0, right + 50, t, 0, 0, flags)
 
     def show_schematic(self, timeout: float = 5.0) -> None:
         """Bring the Schematic Capture tab to the front.  Proteus restores the last tab per project and
@@ -481,6 +504,8 @@ class Session:
         return best
 
     def foreground(self) -> None:
+        if BACKGROUND["on"]:
+            return
         win32gui.ShowWindow(self.main, win32con.SW_RESTORE)
         try:
             # Alt key trick lets SetForegroundWindow succeed from a background process.
@@ -548,6 +573,9 @@ class Session:
         """Real mouse press at screen pixel (x, y) on this Proteus.  Proteus actuators read the real mouse,
         so posted messages do not work.  The window is raised above all others first (topmost on, then off,
         which needs no foreground rights), and the click is refused if anything else is under the point."""
+        if BACKGROUND["on"]:
+            raise GuiError("background mode is on (Proteus is kept off-screen so it does not disturb the owner); "
+                           "real mouse clicks are not possible. Turn it off with proteus_background(false).")
         flags = win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
         win32gui.ShowWindow(self.main, win32con.SW_RESTORE)
         win32gui.SetWindowPos(self.main, win32con.HWND_TOPMOST, 0, 0, 0, 0, flags)
@@ -631,8 +659,12 @@ class Session:
                     win32gui.SendMessage(edit, win32con.WM_SETTEXT, 0, str(self.project))
                     _click_button(d["hwnd"], "Save")
                     time.sleep(0.8)
-                elif re.search(r"already exists|replace", " ".join(d["texts"]), re.I) and "Yes" in d["buttons"]:
-                    _click_button(d["hwnd"], "Yes")
+                elif re.search(r"exist|replace|overwrite", " ".join(d["texts"] + [d["title"]]), re.I):
+                    # overwrite question (wording/buttons vary: Yes/No, Replace/Cancel, OK/Cancel)
+                    button = next((b for b in ("Yes", "Replace", "OK") if b in d["buttons"]), None)
+                    if button is None:
+                        raise UnknownDialog(d["title"], d["texts"], d["buttons"])
+                    _click_button(d["hwnd"], button)
                     time.sleep(0.5)
                 else:
                     self.handle_dialogs()
