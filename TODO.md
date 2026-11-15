@@ -190,7 +190,9 @@ the passing result in `docs/evidence/`.
 - [x] Deleting parts (`schematic_delete`), moving unwired parts (`schematic_move`), `lab_list`.
 - [x] odev2: `scripts/odev2_example.py`, evidence `docs/evidence/odev2_ram.png`. project_open/export now copy
       files the project refers to (ROM images).
-- [ ] lab7: look at the scope trace (background mode off) and confirm 100 Hz; part 2: move the light source.
+- [x] lab7 part 1: DAC output checked with the voltmeter on a slowed program (scope draws nothing here).
+- [ ] lab7 part 2: ADC reads the LDR, motor speed follows it; move the torch with sim_click.
+- [ ] Scope: find out why no trace (timebase 0.5 us/div? display/OpenGL setting?).
 - [ ] Junction taps (connect a pin to a wire that is already there); deleting single wires.
 - [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
 - [ ] 2024 labs as extra cases; one circuit drawn from scratch.

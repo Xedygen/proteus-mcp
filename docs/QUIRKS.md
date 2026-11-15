@@ -24,6 +24,10 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
 - **POT (plain)** is static in simulation (always mid-scale). Use **POT-HG** (place it with
   `schematic_place_devices`), then hold its red buttons with `sim_click(dx_grid=-1.27, dy_grid=+-1.05,
   hold_seconds=...)`; roughly one step per 0.2 s.
+- **Digital Oscilloscope** draws no trace on this install, not even for the student's working lab7 solution
+  (checked with a real screen grab, not only PrintWindow). Check analog outputs with the template's DC
+  voltmeters instead: they average a fast signal (lab7's 6 + 6 sin shows 5.99 V), so for evidence build a
+  slowed-down copy of the program (about 0.7 s per sample) and sample the meter with screenshot_part.
 - **Virtual Terminal:** raw bytes show as characters; `terminal_mode("Hex Display Mode")` switches to hex.
 - **8086 model:** internal memory 0x00000-0x0FFFF (DBG_MEM_SIZE); the program loads at 0800:0000, so the
   interrupt vector table at 0000:0000 is writable RAM. Keep a stack inside your own segment.

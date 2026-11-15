@@ -77,6 +77,7 @@ async def main():
                     raise RuntimeError(f"{tool}{args}: {res.content[0].text}")
                 return res.structured_content or (json.loads(res.content[0].text) if res.content else {})
 
+            await call("proteus_background", on=False)      # the scope only draws while it is visible
             await call("project_open", path=TEMPLATE, name=P, overwrite=True)
             for old, new in RENAMES:
                 await call("schematic_rename_label", project=P, old=old, new=new)

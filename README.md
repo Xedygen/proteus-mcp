@@ -38,7 +38,9 @@ scenarios into terminal 1 prints `DEFNODEF` on terminal 2 (`docs/evidence/lab6_t
 
 `scripts/lab7_example.py` does lab7 part 1 (DAC0830 at 200H, 100 Hz 32-sample sine): renames the YA1..YA6
 placeholders, grounds the ADC pins the template leaves open, writes the program. Netlist checks pass and the
-simulation runs cleanly; the scope trace still needs a look with background mode off.
+simulation runs cleanly. The scope draws nothing on this install (not even for the student's solution), so
+the DAC was checked with the template's voltmeter and a slowed copy of the program: it follows the sine
+between 0 and 12 V (`docs/evidence/lab7_dac_slow.png`); the 100 Hz rate comes from the cycle count.
 
 `scripts/lab8_example.py` does lab8 (8259 + ADC0804 + 8251) starting from the bare template: replaces the
 static POT with an interactive POT-HG, builds the 74154 decoder, wires 8259, 8251, ADC, terminal and two
