@@ -135,6 +135,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `schematic_labels` | Offline list of net names (terminals, wire labels) and the pins wired to them |
 | `schematic_check` | Offline: unconnected pins per part, terminals whose partner is missing or misspelled |
 | `dialog_answer` | Click a button in a Proteus dialog the server does not answer itself |
+| `proteus_edit_component` | Change any part's properties (annotated too, e.g. the 8086 clock) through Proteus's own dialog, for the current session |
 
 ## Use it on a lab PDF
 

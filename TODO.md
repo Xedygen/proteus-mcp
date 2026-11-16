@@ -209,7 +209,11 @@ the passing result in `docs/evidence/`.
             copies no longer take the package name (U4 vs U4:A), schematic_add_terminals (batch).
       - [x] Minimal prompt ("do the lab in this PDF" + save path), lab7 (2026-11-16): picked Application 2
             (LDR -> ADC -> DAC -> motors), motor voltage follows the torch 0 -> 11.9 V; 50 turns, 0 tool errors.
-      - [ ] 2024 labs (different templates) with the minimal prompt.
+      - [x] 2024 lab 8 (minimal prompt; template without a firmware project): DAC square 19.997 Hz and sawtooth
+            39.86 Hz measured in simulation. Fixed from it: lab_list finds proteus_sablon templates, programs
+            for such templates are attached at launch, crash-report prompt declined, top-level log popup.
+            Open: the exported file needs its Program File set once by hand; screenshot_part comes back
+            black for parts on the right side of the sheet.
       - Note: the advisor server tool hangs headless sessions; run with --disallowedTools advisor.
 
 ## Review findings still open (Fable review, 2026-11-15)

@@ -523,7 +523,7 @@ def proteus_launch(project: str) -> dict:
            "title": gui.win32gui.GetWindowText(_session.main)}
     if not pdsprj.firmware_paths(pdsprj.entries(p)) and _external_exe(p).exists() and _cpu_ref(p):
         # set for this Proteus session only (Proteus keeps the stored path in ROOT.CDB)
-        _session.edit_component(_cpu_ref(p), {"PROGRAM": str(_external_exe(p))})
+        _session.edit_component(_cpu_ref(p), _field_labels(p, ["PROGRAM"]), {"PROGRAM": str(_external_exe(p))})
         out["attached_program"] = str(_external_exe(p))
     return out
 
@@ -609,6 +609,29 @@ def sim_status() -> dict:
     """Simulation state (running, paused, stopped) and any open dialogs."""
     s = _require_session()
     return {"state": s.sim_state(), "dialogs": s.dialogs()}
+
+
+@mcp.tool()
+def proteus_edit_component(ref: str, properties: dict[str, str]) -> dict:
+    """Change properties of any part, annotated ones included (e.g. {"CLOCK": "5MHz"} on the 8086,
+    {"FILE": "00.bin"} on a ROM, {"PROGRAM": "C:/path/prog.exe"}), through Proteus's own Edit Component dialog
+    in the running Proteus. The change applies to this Proteus session only: Proteus keeps annotated parts'
+    stored values in ROOT.CDB, which it does not rewrite on save, so redo it after each proteus_launch.
+    For unannotated parts schematic_set_property makes a lasting change offline. The simulation must be
+    stopped."""
+    s = _require_session()
+    if s.sim_state() in ("running", "paused"):
+        raise ValueError("stop the simulation first (sim_stop)")
+    res = s.edit_component(ref, _field_labels(s.project, properties), {k: str(v) for k, v in properties.items()})
+    return {"ref": ref, "session_only": True, **res}
+
+
+def _field_labels(project: Path, keys) -> dict[str, list[str]]:
+    """Dialog labels of property keys, from the device definitions embedded in ROOT.DSN
+    ({PROGRAM="Program File",FILENAME,...}); a key may have different labels on different devices."""
+    data = pdsprj.entries(project)["ROOT.DSN"]
+    return {k: sorted({m.decode("latin-1") for m in re.findall(rb"\{" + re.escape(k.encode()) + rb'="([^"]+)"', data)})
+            for k in keys}
 
 
 @mcp.tool()
@@ -790,7 +813,9 @@ def net_of(ref: str, pin: str) -> dict:
     n, _ = _session_netlist(s)
     refs = set(n.parts) | {r for members in n.nets.values() for r, _ in members}
     if ref.upper() not in {r.upper() for r in refs}:
-        raise ValueError(f"no part {ref!r} in the netlist; parts: {sorted(refs)}")
+        raise ValueError(f"no part {ref!r} in the netlist; parts: {sorted(refs)}. Parts added offline can be "
+                         "renumbered by Proteus when it loads the project (U14 may appear as U3): find the new name in "
+                         "netlist() by device and pins")
     name = n.net_of(ref, pin)
     if name is None:
         raise ValueError(f"{ref} has no pin {pin!r}; its pins: {sorted(n.pins_of(ref))}")
