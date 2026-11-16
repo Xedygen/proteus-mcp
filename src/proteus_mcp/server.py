@@ -765,7 +765,8 @@ def sim_status() -> dict:
 @mcp.tool()
 def proteus_edit_component(ref: str, properties: dict[str, str], save: bool = False) -> dict:
     """Change properties of any part, annotated ones included (e.g. {"CLOCK": "5MHz"} on the 8086,
-    {"FILE": "00.bin"} on a ROM, {"PROGRAM": "C:/path/prog.exe"}), through Proteus's own Edit Component dialog
+    {"FILE": "00.bin"} on a ROM, {"PROGRAM": "C:/path/prog.exe"}, the value {"VALUE": "4.7k"} on a resistor or
+    any part), through Proteus's own Edit Component dialog
     in the running Proteus. The simulation must be stopped.
     save=False: this Proteus session only. save=True: Proteus compiles the design once (a short simulation run,
     which copies the change into ROOT.CDB, where annotated parts' values live) and saves the project, so the
@@ -785,7 +786,9 @@ def _field_labels(project: Path, keys) -> dict[str, list[str]]:
     """Dialog labels of property keys, from the device definitions embedded in ROOT.DSN
     ({PROGRAM="Program File",FILENAME,...}); a key may have different labels on different devices."""
     data = pdsprj.entries(project)["ROOT.DSN"]
-    return {k: sorted({m.decode("latin-1") for m in re.findall(rb"\{" + re.escape(k.encode()) + rb'="([^"]+)"', data)})
+    common = {"VALUE": {"Part Value"}, "REF": {"Part Reference"}}   # fixed fields every dialog shows
+    return {k: sorted({m.decode("latin-1") for m in re.findall(rb"\{" + re.escape(k.encode()) + rb'="([^"]+)"', data)}
+                      | common.get(k.upper(), set()))
             for k in keys}
 
 

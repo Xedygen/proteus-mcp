@@ -117,7 +117,8 @@ Two routes. Try A first; it is deterministic and needs no screen. Fall back to B
       Proteus accepts. This decides whether the database must be written too.
 - [x] (terminals incl. GND/power/named/bus, junction taps onto existing wires) Then: a wire stub from a pin with a wire label; a wire onto an existing wire with a junction dot; a
       ground and a power terminal; a labelled terminal; a bus entry (wire from a pin to a bus with a label).
-- [~] (unannotated parts only; annotated parts need ROOT.CDB, refused) Change a component property (for example `PROGRAM`, `CLOCK`, the ROM image `FILE` of a 27C128) and a
+- [x] (offline for unannotated parts; annotated parts through proteus_edit_component save=True, values
+      included: R3 10k -> 4.7k and U1 "Part Value" checked live 2026-11-16) Change a component property (for example `PROGRAM`, `CLOCK`, the ROM image `FILE` of a 27C128) and a
       component value. Rename a terminal or wire label (lab7 asks for the `YA1` to `YA6` labels to be renamed).
 - [x] (add_part; new device types via schematic_place_devices, needs the mouse) Add a component that is already present in the file by cloning its record at a new position with a new
       reference and identity (a resistor, a NOT gate). For devices not yet in the file the definition must be
@@ -218,7 +219,8 @@ the passing result in `docs/evidence/`.
             all fixed (first sim_click lost, docked debug panels, clash message, 8255 log note).
       - [x] lab8 (2026-11-16): 116 turns, about 2.3 USD, 7 min. Pot turns gave 03 87 AB BF FF. Fixed from it:
             placement now corrects Proteus's drop offset and redoes parts dropped on wires; sim_start while
-            running. Open: generators absent from the netlist. (Memory Dump paging: done, debug_memory and
+            running. Generators absent from the netlist: that is Proteus (the net stays "#nnnnn"), so
+            net_of adds them from the sheet under "generators". (Memory Dump paging: done, debug_memory and
             debug_window(address=...), checked live 2026-11-16.)
       - [x] lab6 (2026-11-16): 85 turns, about 1.8 USD, 6 min; DEF / NO / DEF (+ UVW) on terminal 2. Fixed from
             it: wires leave pins before turning and detour round parts; generators listed with frequency.
