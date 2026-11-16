@@ -889,6 +889,32 @@ def labels(project: str | Path) -> dict:
     return dict(sorted(out.items()))
 
 
+def generators(project: str | Path) -> list[dict]:
+    """Clock / DC generators with their settings and the pins their drawn wires reach (through junctions).
+    Proteus's netlist leaves generators out, so this is how net_of reports what drives a clock pin."""
+    sheet = load(project)
+    holders = _holders(sheet)
+    out = []
+    for o in sheet.objects:
+        if o["type"] != "instrument" or not o["id"].startswith("M"):
+            continue
+        props = dict(re.findall(r"\{([^=}]+)=([^}]*)\}", o["props"].decode("latin-1")))
+        reached = []
+        if o["pointers"] and o["pointers"][0]:
+            for w in _cluster(sheet, o["pointers"][0]):
+                for h, slot in holders.get(w["start"], []):
+                    if h["type"] == "component":
+                        try:
+                            name = pins(sheet, h)[slot]["name"]
+                        except dsn.DsnError:
+                            name = f"slot{slot}"
+                        reached.append(f"{sheet.name_of(h)}.{name}")
+        out.append({"name": o["labels"][0]["text"] or o["device"], "device": o["device"],
+                    **{k.lower(): v for k, v in props.items() if k in ("CLOCK", "VALUE", "INIT", "START")},
+                    "pins": reached})
+    return out
+
+
 def _reroute(sheet: dsn.Sheet, w: dict, pin: dict, far: list[int], comp: dict, slot: int) -> list[list[int]] | None:
     """A fresh maze route for wire w from its far end `far` to `pin` (returned far end first), or None."""
     holder = next(((o, s) for o, s in _holders(sheet)[w["start"]] if not (o is comp and s == slot)), None)

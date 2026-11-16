@@ -813,10 +813,22 @@ def screenshot_part(ref: str, margin_grid: float = 3.0) -> Image:
 def netlist(include_single_pin_nets: bool = False) -> dict:
     """Proteus's own netlist of the open project (Netlist Compiler, logical mode): parts and, for every net,
     the pins on it as REF.PIN. Unannotated parts appear as DEVICE#id. The simulation must be stopped the first
-    time; the result is kept for the rest of this Proteus session (the design cannot change while it is open)."""
+    time; the result is kept for the rest of this Proteus session (the design cannot change while it is open).
+    Proteus leaves clock/DC generators out of its netlist; they are listed under "generators" with the pins
+    and nets their wires reach (read from the drawing)."""
     s = _require_session()
     n, path = _session_netlist(s)
-    return n.summary(include_single_pin_nets) | {"file": str(path)}
+    out = n.summary(include_single_pin_nets) | {"file": str(path)}
+    try:
+        gens = schematic.generators(s.project)
+    except Exception:
+        gens = []
+    if gens:
+        # Proteus leaves generators out of its netlist; they are read from the drawing instead
+        for g in gens:
+            g["nets"] = sorted({n.net_of(*p.split(".", 1)) for p in g["pins"] if "." in p} - {None})
+        out["generators"] = gens
+    return out
 
 
 _NETLIST: dict = {}
@@ -847,7 +859,26 @@ def net_of(ref: str, pin: str) -> dict:
     name = n.net_of(ref, pin)
     if name is None:
         raise ValueError(f"{ref} has no pin {pin!r}; its pins: {sorted(n.pins_of(ref))}")
-    return {"net": name, "members": [f"{r}.{p}" for r, p in n.nets.get(name, [])]}
+    members = [f"{r}.{p}" for r, p in n.nets.get(name, [])]
+    out = {"net": name, "members": members}
+    gens = _generators_on(s, members)
+    if gens:
+        out["generators"] = gens
+    return out
+
+
+def _norm_pin(m: str) -> str:
+    return m.replace("$", "").upper()
+
+
+def _generators_on(s: gui.Session, members: list[str]) -> list[dict]:
+    """Generators (absent from Proteus's netlist) whose wires reach any of these pins, from ROOT.DSN."""
+    try:
+        gens = schematic.generators(s.project)
+    except Exception:
+        return []
+    want = {_norm_pin(m) for m in members}
+    return [g for g in gens if want & {_norm_pin(p) for p in g["pins"]}]
 
 
 def main() -> None:

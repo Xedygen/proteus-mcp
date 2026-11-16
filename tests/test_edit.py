@@ -159,6 +159,16 @@ def test_wire_label(proj):
         schematic.add_wire_label(proj, "U2.Q2", "AD[0..7]")   # bus name on a plain wire
 
 
+def test_generators_report_their_pins(proj):
+    r = schematic.add_generator(proj, "U3.PA0", 1000, name="CK1", distance_grid=10)
+    consistent(proj)
+    g = next(g for g in schematic.generators(proj) if g["name"] == "CK1")
+    assert g["pins"] == ["U3.PA0"] and g["clock"] == "1000"
+    schematic.tap(proj, "U2.Q2", "U3.PA0")              # a second pin on the generator's net
+    g = next(g for g in schematic.generators(proj) if g["name"] == "CK1")
+    assert sorted(g["pins"]) == ["U2.Q2", "U3.PA0"]
+
+
 def test_delete_wire_by_point(proj):
     sheet = schematic.load(proj)
     holders = schematic._holders(sheet)
