@@ -68,11 +68,16 @@ mcp.tool = _tool
 
 # ----- helpers ------------------------------------------------------------------------------
 def _project(name: str) -> Path:
-    p = PROJECTS / (name if name.lower().endswith(".pdsprj") else name + ".pdsprj")
-    if not p.is_file():
-        raise ValueError(f"no workspace project {name!r}; open one with project_open. "
-                         f"Existing: {[q.stem for q in PROJECTS.glob('*.pdsprj')]}")
-    return p
+    stem = name[:-7] if name.lower().endswith(".pdsprj") else name
+    for p in (PROJECTS / stem / f"{stem}.pdsprj", PROJECTS / f"{stem}.pdsprj"):   # own folder; flat = older copies
+        if p.is_file():
+            return p
+    raise ValueError(f"no workspace project {name!r}; open one with project_open. Existing: {_workspace_names()}")
+
+
+def _workspace_names() -> list[str]:
+    return sorted({q.stem for q in PROJECTS.glob("*.pdsprj")}
+                  | {q.stem for q in PROJECTS.glob("*/*.pdsprj") if q.parent.name == q.stem})
 
 
 def _require_session() -> gui.Session:
@@ -192,8 +197,12 @@ def project_open(path: str, name: str | None = None, overwrite: bool = False) ->
         raise ValueError(f"not a file: {src}")
     default = f"{src.parent.name}_{src.stem}"
     stem = re.sub(r"[^A-Za-z0-9_.-]", "_", name or default)  # Proteus 8.6 can fail on non-ASCII paths
-    dst = PROJECTS / f"{stem}.pdsprj"
-    origin = PROJECTS / f"{stem}.source"
+    # each project in its own folder, so files it refers to by name (ROM images 00.bin ...) cannot overwrite
+    # another project's; a flat copy left by an older version is still used until it is overwritten
+    flat = PROJECTS / f"{stem}.pdsprj"
+    folder = PROJECTS / stem
+    dst = flat if flat.exists() and not overwrite else folder / f"{stem}.pdsprj"
+    origin = dst.with_suffix(".source")
     reused = dst.exists() and not overwrite
     if dst.exists() and overwrite and _session is not None and _session.alive() and _session.project.resolve() == dst.resolve():
         raise ValueError(f"{stem} is open in Proteus; call proteus_close before overwriting it")
@@ -202,11 +211,11 @@ def project_open(path: str, name: str | None = None, overwrite: bool = False) ->
                          "another name or overwrite=True")
     copied = []
     if not reused:
-        PROJECTS.mkdir(parents=True, exist_ok=True)
+        dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dst)
         origin.write_text(str(src.resolve()), encoding="utf-8")
         for f in pdsprj.referenced_files(src):       # e.g. ROM images named in FILE properties
-            shutil.copyfile(f, PROJECTS / f.name)
+            shutil.copyfile(f, dst.parent / f.name)
             copied.append(f.name)
     return project_info(stem) | {"source": str(src.resolve()), "reused": reused, "files_copied": copied}
 
@@ -1019,10 +1028,7 @@ _NETLIST: dict = {}
 
 def _session_netlist(s: gui.Session):
     if _NETLIST.get("session") is not s:
-        out = PROJECTS / f"{s.project.stem}.sdf"          # one file per project, replaced each session
-        for old in PROJECTS.glob(f"{s.project.stem}_*.sdf"):
-            old.unlink(missing_ok=True)                  # files left by earlier versions
-        path = s.netlist(out)
+        path = s.netlist(s.project.with_suffix(".sdf"))  # one file per project, replaced each session
         _NETLIST.update(session=s, netlist=parse_netlist(path.read_text(encoding="latin-1")), path=path)
     return _NETLIST["netlist"], _NETLIST["path"]
 

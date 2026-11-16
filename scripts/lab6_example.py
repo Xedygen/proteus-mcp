@@ -21,7 +21,9 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 REPO = Path(__file__).resolve().parents[1]
-SOURCE_PROJECT = sys.argv[1] if len(sys.argv) > 1 else str(REPO / "work" / "projects" / "lab6_place.pdsprj")
+_PLACED = [REPO / "work" / "projects" / "lab6_place" / "lab6_place.pdsprj",     # workspace layout
+           REPO / "work" / "projects" / "lab6_place.pdsprj"]                    # older flat layout
+SOURCE_PROJECT = sys.argv[1] if len(sys.argv) > 1 else str(next((p for p in _PLACED if p.exists()), _PLACED[0]))
 P = "lab6_example"
 T_IN, T_OUT = "$IVIRTUAL TERMINAL#0002", "$IVIRTUAL TERMINAL#000D"   # upper = input, lower = output
 

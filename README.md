@@ -122,7 +122,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | --- | --- |
 | `proteus_doctor` | Install, versions, DOSBox and MASM, running Proteus processes |
 | `quirks` | Rules for code that builds and simulates here (MASM 5.10 limits, model quirks) |
-| `project_open`, `project_info`, `project_export` | Workspace copies under `work/projects`; originals are never touched |
+| `project_open`, `project_info`, `project_export` | Workspace copies, one folder per project under `work/projects/<name>/` (with the ROM images etc. it refers to); originals are never touched |
 | `firmware_get_source`, `firmware_build` | Read `main.asm`; assemble and link (optionally with new source), store EXE in the project; errors with line numbers |
 | `proteus_launch`, `proteus_close` | One Proteus instance at a time, only one this server started |
 | `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` | `sim_start` also checks that the 8086 loaded the EXE stored in the project |
