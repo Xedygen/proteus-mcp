@@ -768,9 +768,43 @@ def _placement_check(sheet: dsn.Sheet, comp: dict, ignore: tuple = ()) -> None:
         sheet.objects = saved
 
 
+_MIRRORS = {"none": 0, "x": 1, "y": 2}
+
+
+def _vertical(transform: bytes) -> bool:
+    return struct.unpack("<hH", transform)[0] % 1800 != 0
+
+
+def _relabel(sheet: dsn.Sheet, comp: dict) -> None:
+    """Reference and value labels for a part turned by 90 degrees relative to its source. Proteus keeps label
+    text horizontal and puts it where it fits: beside a vertical part (ref above value, both anchored at
+    their top), above and below a horizontal one (as in the sample files)."""
+    try:
+        ps = [p["xy"] for p in pins(sheet, comp) if not p["hidden"]]
+    except dsn.DsnError:
+        return
+    ox, oy = comp["origin"]
+    dx = max([abs(x - ox) for x, _ in ps] + [0])
+    dy = max([abs(y - oy) for _, y in ps] + [0])
+    h = GRID * 8 // 100                                 # labels sit 0.08 grid off the grid, as Proteus puts them
+    ref, val = comp["labels"][0], comp["labels"][1]
+    top = bytes.fromhex("000002000000")
+    if _vertical(comp["transform"]):
+        x = ox + dx + 2 * GRID + h
+        ref["xy"], ref["transform"] = [x, oy + GRID + h], top
+        val["xy"], val["transform"] = [x, oy - GRID // 2 + h], top
+    else:
+        x = ox - GRID - h
+        ref["xy"], ref["transform"] = [x, oy + dy + GRID + GRID // 2 + h], bytes(6)
+        val["xy"], val["transform"] = [x, oy - dy - GRID - GRID // 2 - h], top
+
+
 def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotation: int | None = None,
-             value: str | None = None, ref: str | None = None) -> dict:
+             value: str | None = None, ref: str | None = None, mirror: str | None = None) -> dict:
     """Place a copy of an existing part (e.g. like="RES#0010" or like="U5") at a grid position.
+
+    `rotation` (0/90/180/270) and `mirror` ("x" flips left-right, "y" top-bottom, "none") replace the
+    source's; when the copy ends up turned by 90 degrees against the source, its labels are moved beside it.
 
     Only devices already in the file can be placed (their library definition is embedded).
     The copy gets its own reference (`ref`, default: the prefix of an existing part of that device plus the
@@ -787,11 +821,18 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
     new["origin"] = origin
     for t in new["labels"]:
         t["xy"] = [t["xy"][0] + dx, t["xy"][1] + dy]
+    angle, mbits = struct.unpack("<hH", new["transform"])
     if rotation is not None:
         if rotation not in _ROTATIONS:
             raise dsn.DsnError("rotation must be 0, 90, 180 or 270")
-        _, mirror = struct.unpack("<hH", new["transform"])
-        new["transform"] = struct.pack("<hH", _ROTATIONS[rotation], mirror)
+        angle = _ROTATIONS[rotation]
+    if mirror is not None:
+        if mirror not in _MIRRORS:
+            raise dsn.DsnError("mirror must be 'none', 'x' (flip left-right) or 'y' (flip top-bottom)")
+        mbits = _MIRRORS[mirror]
+    new["transform"] = struct.pack("<hH", angle, mbits)
+    if _vertical(new["transform"]) != _vertical(src["transform"]):
+        _relabel(sheet, new)
     if value is not None:
         new["labels"][1]["text"] = value
     new["identity"] = _next_identity(sheet)

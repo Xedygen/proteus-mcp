@@ -137,7 +137,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0`; if one of them is already wired it taps that net instead |
 | `schematic_tap` | Wire a free pin onto an existing net (a wired pin, terminal or wire label) with a junction dot |
 | `schematic_delete_wire` | Delete the wire on a pin or at a point; a junction left with two wires is merged away |
-| `schematic_add_part` | Place a copy of an unannotated part already in the design (e.g. a resistor) with its own reference |
+| `schematic_add_part` | Place a copy of a part already in the design (e.g. a resistor or a 74HC373) with its own reference, optionally rotated or mirrored |
 | `schematic_add_terminal`, `schematic_add_terminals` | GND, power or named-net terminal on a pin (`AD0` joins the AD bus line). Supply names (`+12V`, `-5V`, `VEE`, `V+`) become a labelled power terminal, so Proteus drives that rail. The plural takes a list |
 | `schematic_add_wire_label` | Name a net with a wire label; wires and terminals with the same name are one net (the label is placed clear of pins and of bodies estimated from pin positions; a body that extends past its pins, like the 7-segment display, can still be overlapped, so pass `at_grid` then) |
 | `schematic_rename_label` | Rename terminals / wire labels (e.g. lab7's YA1..YA6) |

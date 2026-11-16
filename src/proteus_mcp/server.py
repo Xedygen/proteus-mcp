@@ -331,13 +331,14 @@ def schematic_connect(project: str, a: str, b: str, via_x_grid: float | None = N
 
 @mcp.tool()
 def schematic_add_part(project: str, like: str, x_grid: float, y_grid: float, rotation: int | None = None,
-                       value: str | None = None, ref: str | None = None) -> dict:
+                       value: str | None = None, ref: str | None = None, mirror: str | None = None) -> dict:
     """Place a copy of a part already in the design, e.g. like="RES#0010" or like="U5" (a NOT gate), at a
     grid position (0.1 inch units, y up; schematic_components shows where things are). Gets reference `ref`
-    (default: same prefix, next free number, e.g. U8) and optional new `value`. Only devices already present
-    in the file can be placed. Proteus may re-annotate on load; use the name netlist/net_of report.
-    Refuses positions where a pin would land on something."""
-    return schematic.add_part(_closed(project), like, x_grid, y_grid, rotation, value, ref)
+    (default: same prefix, next free number, e.g. U8) and optional new `value`. `rotation` 0/90/180/270
+    (counter-clockwise) and `mirror` "x" (left-right) / "y" (top-bottom) / "none" replace the source's.
+    Only devices already present in the file can be placed. Proteus may re-annotate on load; use the name
+    netlist/net_of report. Refuses positions where a pin would land on something."""
+    return schematic.add_part(_closed(project), like, x_grid, y_grid, rotation, value, ref, mirror)
 
 
 def _stop(s: gui.Session) -> None:

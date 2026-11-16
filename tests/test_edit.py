@@ -178,6 +178,25 @@ def test_supply_names_become_power_terminals(proj):
     assert {"+12V", "VEE"} <= texts
 
 
+def test_add_part_mirror_and_turned_labels(proj):
+    """A mirrored copy has its pins flipped; a copy turned 90 degrees against its source gets its labels moved
+    beside it (checked in Proteus 2026-11-16: net MX = U4.D0 + R1.1, labels clear of the bodies)."""
+    r = schematic.add_part(proj, "U2", -25, -22, mirror="x", ref="U20")
+    sheet = consistent(proj)
+    src, new = sheet.component("U2"), sheet.component("U20")
+    sp = {p["name"]: p for p in pins(sheet, src)}
+    np_ = {p["name"]: p for p in pins(sheet, new)}
+    assert (np_["D0"]["xy"][0] - new["origin"][0]) == -(sp["D0"]["xy"][0] - src["origin"][0])
+    assert np_["D0"]["out"][0] == -sp["D0"]["out"][0]
+    schematic.add_part(proj, "RES#0010", 0, -20, rotation=0, ref="R20")
+    sheet = consistent(proj)
+    res = sheet.component("R20")
+    ref, val = res["labels"][0]["xy"], res["labels"][1]["xy"]
+    assert ref[1] > res["origin"][1] > val[1]                 # horizontal resistor: ref above, value below
+    with pytest.raises(dsn.DsnError):
+        schematic.add_part(proj, "RES#0010", 5, -25, mirror="z")
+
+
 def test_prune_after_proteus_delete(tmp_path):
     """Mimic Proteus deleting the lab6 8251 (the part and its wires only), then tidy the far ends."""
     p = tmp_path / "l6.pdsprj"

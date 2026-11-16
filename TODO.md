@@ -238,7 +238,8 @@ place-devices verification, generator identity clash.
 - [x] net_of errors on unknown parts/pins; netlist compiled once per Proteus session, one SDF per project.
 - [x] sim() waits for the requested state. (sim_log still pauses/resumes when the log popup is closed.)
 - [x] Turning background mode off brings hidden popups back on screen.
-- [x] add_part prefix for multi-gate parts. (Rotation still leaves labels unrotated.)
+- [x] add_part prefix for multi-gate parts. Rotation: labels of a copy turned 90 degrees against its source
+      are moved beside it; `mirror` added (both checked in Proteus 2026-11-16).
 - [x] _check_clear misses a corner landing mid-wire; parts with unparsable pin tables are unprotected.
       (New wires come from the maze router, which forbids corners on wires and boxes unreadable parts.)
 - [x] dialog_answer, schematic_labels added; ROM images travel with the project.
