@@ -803,7 +803,13 @@ def screenshot_part(ref: str, margin_grid: float = 3.0) -> Image:
     s = _require_session()
     _, box = _part_screen_box(s, ref, margin_grid)
     ml, mt, _, _ = gui.win32gui.GetWindowRect(s.main)
-    img = s.screenshot().crop((box[0] - ml, box[1] - mt, box[2] - ml, box[3] - mt))
+    # only the editing canvas shows the sheet; outside it the crop would come back black
+    el, et, er, eb = gui.win32gui.GetWindowRect(s.edit_window())
+    vis = (max(box[0], el), max(box[1], et), min(box[2], er), min(box[3], eb))
+    if vis[2] - vis[0] < 20 or vis[3] - vis[1] < 20:
+        raise ValueError(f"{ref} is outside the visible area: the view is zoomed to the sheet border and {ref} "
+                         "was placed beyond it. Use screenshot for the whole window, or a part inside the border")
+    img = s.screenshot().crop((vis[0] - ml, vis[1] - mt, vis[2] - ml, vis[3] - mt))
     if img.width < 300:
         img = img.resize((img.width * 2, img.height * 2))
     return Image(data=gui.png_bytes(img), format="png")

@@ -220,8 +220,9 @@ the passing result in `docs/evidence/`.
       - [x] 2024 lab 8 (minimal prompt; template without a firmware project): DAC square 19.997 Hz and sawtooth
             39.86 Hz measured in simulation. Fixed from it: lab_list finds proteus_sablon templates, programs
             for such templates are attached at launch, crash-report prompt declined, top-level log popup.
-            Open: the exported file needs its Program File set once by hand; screenshot_part comes back
-            black for parts on the right side of the sheet.
+            Open: the exported file needs its Program File set once by hand. (screenshot_part came back black
+            for parts placed outside the sheet border, beyond the zoomed view: now clipped to the canvas, with a
+            clear error when the part is not visible at all.)
       - Note: the advisor server tool hangs headless sessions; run with --disallowedTools advisor.
 
 ## Review findings still open (Fable review, 2026-11-15)
