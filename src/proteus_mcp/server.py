@@ -16,7 +16,7 @@ from pathlib import Path
 from mcp.server.mcpserver import Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from . import doctor, dsn, firmware, gui, paths, pdsprj, route, schematic
+from . import doctor, dsn, firmware, gui, library, paths, pdsprj, route, schematic
 from .netlist import parse as parse_netlist
 
 PROJECTS = paths.WORK_DIR / "projects"
@@ -28,7 +28,7 @@ Typical flow for a lab PDF: lab_list() to find the lab's template (taslak.pdsprj
 schematic_components (parts, pins, connection state) -> wire it offline with schematic_add_terminals (many
 named nets / GND / VCC per call; schematic_add_terminal for one), schematic_connect (two free pins), schematic_tap (free pin onto an existing
 net, junction), schematic_delete_wire, schematic_add_part, schematic_add_generator, schematic_rename_label,
-schematic_delete / schematic_move (new device types: schematic_place_devices) -> firmware_build(source=...)
+schematic_delete / schematic_move (new device types: library_search, then schematic_place_devices) -> firmware_build(source=...)
 (MASM 5.10, errors with line numbers) -> schematic_check (missing wires, lone terminals) -> proteus_launch -> net_of / netlist to check wiring -> sim_start ->
 sim_log, screenshot, screenshot_part, terminal_screenshot, terminal_mode, sim_click, debug_window -> sim_stop
 -> proteus_close -> project_export to hand the result over.
@@ -350,8 +350,30 @@ def _stop(s: gui.Session) -> None:
 
 
 @mcp.tool()
+def library_search(query: str, limit: int = 30, category: str | None = None) -> dict:
+    """Find device names in Proteus's installed libraries (offline, about 55,000 devices), e.g. "8255",
+    "4-to-16 decoder", "led red", "7seg common anode". Every word must appear in the name, description,
+    category, subcategory or manufacturer; exact and prefix name matches come first. `category` narrows it,
+    e.g. "Microprocessor ICs", "TTL 74LS series", "Optoelectronics". Use the `device` value with
+    schematic_place_devices. Names with a dot (74154.IEC) are symbol variants of the same part."""
+    return library.search(query, limit, category)
+
+
+def _check_device_names(devices: list[dict]) -> None:
+    names = {d["device"].lower() for d in library.index()}
+    if len(names) < 1000:                  # library folder missing or unreadable: let Proteus decide
+        return
+    for d in devices:
+        if d["device"].lower() not in names:
+            near = [x["device"] for x in library.search(d["device"].split()[0], limit=8)["devices"]]
+            raise ValueError(f"no device named {d['device']!r} in the Proteus libraries"
+                             + (f"; close names: {', '.join(near)}" if near else "; try library_search"))
+
+
+@mcp.tool()
 def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     """Place NEW device types from Proteus's libraries (e.g. a 74HC4078 or 4002 gate the template lacks).
+    Find exact names with library_search; unknown names are refused before Proteus starts.
 
     `devices` is a list of {"device": "74HC4078", "x_grid": 0, "y_grid": -30}. Proteus is launched on the
     project, each device is picked in the Pick Devices dialog and dropped near the given point, the project is
@@ -364,6 +386,7 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     p = _closed(project)
     if _session is not None and _session.alive():
         raise ValueError(f"Proteus is running on {_session.project.stem}; call proteus_close first")
+    _check_device_names(devices)
     comps = schematic.components(p, with_pins=False)
     before = {c["ref"] for c in comps}
     sheet = schematic.load(p)

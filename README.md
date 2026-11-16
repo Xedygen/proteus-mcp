@@ -129,7 +129,8 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `screenshot`, `debug_window` | Main window or a named window; Debug-menu popups while paused |
 | `sim_click`, `screenshot_part` | Press a button / toggle a switch during a run (real mouse, guarded); close-up of one part |
 | `terminal_type`, `terminal_screenshot` | Type into Virtual Terminals during a run; capture what they show |
-| `schematic_place_devices` | Place new device types from the Proteus libraries (GUI, then saved by Proteus); spots outside the sheet border or on an existing part or wire are refused before Proteus starts |
+| `library_search` | Offline search of the installed device libraries (about 55,000 devices: name, library, category, description), e.g. "4-to-16 decoder" |
+| `schematic_place_devices` | Place new device types from the Proteus libraries (GUI, then saved by Proteus); unknown names, spots outside the sheet border or on an existing part or wire are refused before Proteus starts |
 | `proteus_background` | Background mode (default): Proteus runs off-screen without taking focus; mouse-based tools pause |
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
 | `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |

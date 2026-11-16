@@ -48,8 +48,9 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   temp path. Proteus links programs through ROOT.CDB, which only its own dialogs may change; a changed
   property is saved into ROOT.DSN but not ROOT.CDB, so it lasts one Proteus session. firmware_build keeps the
   EXE beside the project (<name>_8086.exe) and proteus_launch sets the 8086's Program File to it through the
-  Edit Component dialog every time. Editing an annotated part's ROOT.DSN properties directly, or removing
-  ROOT.CDB, makes Proteus crash at load.
+  Edit Component dialog every time. Removing ROOT.CDB makes Proteus crash at load. Changing an annotated
+  part's property only in ROOT.DSN was seen to crash the load here (2024 template) and to be ignored in the
+  2025 templates (see Schematic edits below); either way it does not work, and the tools refuse it.
 - **Crash-report prompt:** after a Proteus crash, the next start asks ("Reports Uploading") whether to send
   reports to Labcenter; the tools always answer No.
 - **Simulation Log** is a separate top-level popup in some projects (2024 templates), docked in others.

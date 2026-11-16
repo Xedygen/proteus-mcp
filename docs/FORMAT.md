@@ -128,13 +128,17 @@ The kind byte is ambiguous: `0x01` is a junction and also the flag byte of a bus
 by structure instead: flag byte 0 or 1, u32 style length L, and the style ending in `WIRE\0` (`BUS WIRE\0`)
 at offset +1+L. Wire style lengths seen: 0x1d (wire), 0x21 (bus wire).
 
-Other kinds seen but not decoded yet (2026-11-15):
+Other kinds, all parsed and written back byte for byte (counts over every sample file, 2026-11-16):
 
-| Kind | Where | What it seems to be |
+| Kind | Device | What it is |
 | --- | --- | --- |
-| `0xBB` | lab6 (all), 2024 lab6/7, LordofNights13 lab6/lab8 | Generator: `$DCLOCK` device, label `CLOCK` (8251 clock source) |
-| `0x20` | lab7, odev2 | 2D graphic (box/line with colour `c8 c8 aa`): border, title block, note boxes |
-| `0x38` | 2024 lab8 | unknown |
+| `0xBB` | `$DCLOCK0` | Digital clock generator (lab6's `CLOCK` for the 8251), read by `read_instrument` (15 seen) |
+| `0x38` | `$DCGEN` | DC generator, 2024 lab8 (8 seen) |
+| `0x30` | `$VPROBE` | Voltage probe (8 seen) |
+| `0x20` | | 2D graphic (box/line with colour `c8 c8 aa`): border, title block, note boxes (29 seen) |
+| `0x02` | | Script / notes block (7 seen) |
+
+Instruments are told apart by structure, not by the kind byte, which varies (`_is_instrument`).
 
 ### Ordering rule
 
