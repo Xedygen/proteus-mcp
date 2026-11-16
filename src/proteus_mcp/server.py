@@ -16,7 +16,7 @@ from pathlib import Path
 from mcp.server.mcpserver import Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from . import doctor, firmware, gui, paths, pdsprj, schematic
+from . import doctor, dsn, firmware, gui, paths, pdsprj, route, schematic
 from .netlist import parse as parse_netlist
 
 PROJECTS = paths.WORK_DIR / "projects"
@@ -364,8 +364,21 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     p = _closed(project)
     if _session is not None and _session.alive():
         raise ValueError(f"Proteus is running on {_session.project.stem}; call proteus_close first")
-    before = {c["ref"] for c in schematic.components(p, with_pins=False)}
-    size = schematic.load(p).size()
+    comps = schematic.components(p, with_pins=False)
+    before = {c["ref"] for c in comps}
+    sheet = schematic.load(p)
+    size = sheet.size()
+    taken = route.Obstacles(sheet, pad=0).nodes
+    hw, hh = size[0] / 2 / schematic.GRID, size[1] / 2 / schematic.GRID
+    for d in devices:                   # a drop click on a part opens its Edit Component dialog instead
+        x, y = round(float(d["x_grid"])), round(float(d["y_grid"]))
+        if abs(x) > hw - 2 or abs(y) > hh - 2:
+            raise ValueError(f"({x}, {y}) for {d['device']} is outside the sheet border (x within +-{hw - 2:g}, "
+                             f"y within +-{hh - 2:g}); the editor shows only the sheet, so the drop would miss")
+        if any((x + i, y + j) in taken for i in (-1, 0, 1) for j in (-1, 0, 1)):
+            near = min(comps, key=lambda c: abs(c["grid"][0] - x) + abs(c["grid"][1] - y))
+            raise ValueError(f"({x}, {y}) for {d['device']} is on or next to an existing part or wire (nearest part "
+                             f"{near['ref']} at {near['grid']}); pick an empty area (schematic_components)")
     snapshot = p.read_bytes()           # restored before a retry and on failure: no stray parts are left
     G = schematic.GRID
     want = [(d["device"], float(d["x_grid"]), float(d["y_grid"])) for d in devices]
@@ -471,8 +484,38 @@ def schematic_add_wire_label(project: str, target: str, name: str, at_grid: list
 def schematic_delete(project: str, ref: str) -> dict:
     """Delete a part (by reference, e.g. "RV1") or a generator (by name) together with its wires; terminals
     and generators at the far ends of those wires go too, other pins just become unconnected. Parts that
-    have a ROOT.CDB record (annotated and saved by Proteus) are refused."""
-    return schematic.delete_part(_closed(project), ref)
+    have a ROOT.CDB record (annotated and saved by Proteus, e.g. the template's own chips) are deleted by
+    Proteus itself instead: it is launched on the project, the part is found with Search & Tag and deleted
+    with its wires, the project is saved and Proteus is closed (no mouse), then the terminals, generators and
+    junctions left hanging at the far ends are tidied the same way."""
+    global _session
+    p = _closed(project)
+    try:
+        return schematic.delete_part(p, ref)
+    except dsn.DsnError as e:
+        if "ROOT.CDB" not in str(e):
+            raise
+    if _session is not None and _session.alive():
+        raise ValueError(f"Proteus is running on {_session.project.stem}; call proteus_close first")
+    wires = len(schematic.load(p).wires())
+    ends = schematic.far_ends(p, ref)
+    snapshot = p.read_bytes()
+    s = gui.Session.launch(p)
+    try:
+        s.delete_part(ref)
+        s.save()
+    except BaseException:
+        _stop(s)
+        p.write_bytes(snapshot)
+        raise
+    _stop(s)
+    left = {c["ref"] for c in schematic.components(p, with_pins=False)}
+    if ref in left:
+        p.write_bytes(snapshot)
+        raise gui.GuiError(f"{ref} is still in the saved file; the project was restored")
+    tidy = schematic.prune_orphans(p, ends)     # Proteus leaves terminals / generators / junctions behind
+    return {"deleted": ref, "wires": wires - len(schematic.load(p).wires()), "by": "Proteus (annotated part)",
+            **tidy}
 
 
 @mcp.tool()

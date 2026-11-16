@@ -819,9 +819,22 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
     sheet.objects.append(new)
     sheet.reschedule()
     save(project, sheet)
-    return {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID],
-            "pins": [{"name": p["name"], "grid": [p["xy"][0] / GRID, p["xy"][1] / GRID]}
-                     for p in pins(sheet, new) if not p["hidden"]]}
+    out = {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID],
+           "pins": [{"name": p["name"], "grid": [p["xy"][0] / GRID, p["xy"][1] / GRID]}
+                    for p in pins(sheet, new) if not p["hidden"]]}
+    if _outside_sheet(sheet, new):
+        out["warning"] = ("outside the sheet border: it simulates, but the editor view (zoomed to the sheet) "
+                          "does not show it, so screenshots and clicks cannot reach it")
+    return out
+
+
+def _outside_sheet(sheet: dsn.Sheet, comp: dict) -> bool:
+    w, h = sheet.size()
+    try:
+        ps = [p["xy"] for p in pins(sheet, comp) if not p["hidden"]]
+    except dsn.DsnError:
+        ps = []
+    return any(abs(x) > w / 2 or abs(y) > h / 2 for x, y in ps + [comp["origin"]])
 
 
 def check(project: str | Path) -> dict:
@@ -855,6 +868,9 @@ def check(project: str | Path) -> dict:
     out = {"unconnected_pins": open_pins, "single_use_names": singles}
     if unreadable:
         out["pin_table_unreadable"] = unreadable
+    outside = [sheet.name_of(c) for c in sheet.components() if _outside_sheet(sheet, c)]
+    if outside:
+        out["outside_sheet_border"] = outside   # simulates, but screenshots and clicks cannot reach them
     return out
 
 
@@ -1036,6 +1052,56 @@ def delete_part(project: str | Path, ref: str) -> dict:
     sheet.reschedule()
     save(project, sheet)
     return {"deleted": ref, "wires": len(doomed) - 1 - len(gone), "terminals_removed": gone}
+
+
+def far_ends(project: str | Path, ref: str) -> list[tuple[str, tuple[int, int]]]:
+    """(type, origin) of every terminal, generator or junction at the far end of a wire on part `ref`."""
+    sheet = load(project)
+    comp = sheet.component(ref)
+    keys = {k for k in comp["pointers"] if k}
+    return [(o["type"], tuple(o["origin"])) for o in sheet.objects
+            if o is not comp and o["type"] in ("terminal", "instrument", "junction")
+            and keys & set(o.get("pointers", []))]
+
+
+def prune_orphans(project: str | Path, ends: list[tuple[str, tuple[int, int]]]) -> dict:
+    """After Proteus deleted a part with its wires, tidy what it leaves at the far ends (`ends` from far_ends,
+    taken before the delete): terminals and generators with no wire left go, junctions with none go, a
+    junction with one wire goes with that dead-end wire (and the walk continues at the wire's other end), and a
+    junction with two wires is merged into one wire.  Matches what delete_part does offline."""
+    sheet = load(project)
+    want = set(ends)
+    work = [o for o in sheet.objects if (o["type"], tuple(o.get("origin", ()))) in want]
+    gone, merged = [], 0
+    while work:
+        o = work.pop()
+        if not any(x is o for x in sheet.objects):
+            continue
+        keys = [k for k in o["pointers"] if k]
+        if o["type"] in ("terminal", "instrument"):
+            if not keys:
+                sheet.objects = [x for x in sheet.objects if x is not o]
+                gone.append(o["label"]["text"] if o["type"] == "terminal" else o["labels"][0]["text"])
+            continue
+        if len(keys) == 2:
+            _merge_at(sheet, o)
+            merged += 1
+        elif len(keys) <= 1:
+            dead = set(keys)
+            holders = _holders(sheet)
+            for k in dead:
+                for h, slot in holders.get(k, []):
+                    if h is not o:
+                        h["pointers"][slot] = 0
+                        if h["type"] in ("terminal", "instrument", "junction"):
+                            work.append(h)
+            sheet.objects = [x for x in sheet.objects
+                             if x is not o and not (x["type"] == "wire" and x["start"] in dead)]
+        else:
+            o["pointers"] = keys + [0] * (len(o["pointers"]) - len(keys))
+    sheet.reschedule()
+    save(project, sheet)
+    return {"terminals_removed": gone, "junctions_merged": merged}
 
 
 def rename_label(project: str | Path, old: str, new: str) -> dict:

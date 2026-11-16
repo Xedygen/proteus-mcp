@@ -122,7 +122,7 @@ Two routes. Try A first; it is deterministic and needs no screen. Fall back to B
 - [x] (add_part; new device types via schematic_place_devices, needs the mouse) Add a component that is already present in the file by cloning its record at a new position with a new
       reference and identity (a resistor, a NOT gate). For devices not yet in the file the definition must be
       copied from `LIBRARY\*.LIB`; do this only if the labs need it (lab6 and odev2 allow extra logic gates).
-- [ ] Delete a component or a wire.
+- [x] (schematic_delete, schematic_delete_wire) Delete a component or a wire.
 
 **Route B: drive the editor.** Only for operations A cannot do reliably. Wire mode clicks at computed pin
 positions, the label tool, the pick-device dialog (`P`), typed dialogs. After every GUI edit, save, re-read
@@ -170,9 +170,9 @@ the passing result in `docs/evidence/`.
 - [x] 2025 lab8 (scripts/lab8_example.py, docs/evidence/lab8_pot_terminal.png): 8259 vectors 51H and 52H, samples printed as hex, pot turns change them.
 - [x] 2025 odev2 (scripts/odev2_example.py, docs/evidence/odev2_ram.png): ROM at 20000H, RAM at 60000H, `00.bin` ... `11.bin` loaded, RAM00 / RAM01 contents match
       the sample output in the PDF.
-- [ ] 2025 lab7 part 2 and the 2024 labs if time allows.
-- [ ] One circuit that is not from a template, to cover the original "draw schematics" brief: for example
-      add an 8255 and LEDs to a board that has only the 8086 and latches.
+- [x] 2025 lab7 part 2 (fresh minimal-prompt session, see below). The 2024 labs if time allows.
+- [x] One circuit that is not from a template (scripts/scratch_example.py, docs/evidence/scratch_8255_leds.png):
+      lab6's 8251 deleted, an 8255A and eight LEDs placed from the libraries, 74154 decoding, 0A5H on port A.
 
 ## Milestone 7: wrap up
 
@@ -191,7 +191,8 @@ the passing result in `docs/evidence/`.
 - [x] odev2: `scripts/odev2_example.py`, evidence `docs/evidence/odev2_ram.png`. project_open/export now copy
       files the project refers to (ROM images).
 - [x] lab7 part 1: DAC output checked with the voltmeter on a slowed program (scope draws nothing here).
-- [ ] lab7 part 2: ADC reads the LDR, motor speed follows it; move the torch with sim_click.
+- [x] lab7 part 2: ADC reads the LDR, motor speed follows it (done by the minimal-prompt fresh session below,
+      Application 2: motor voltage follows the torch 0 -> 11.9 V).
 - [ ] Scope: find out why no trace (timebase 0.5 us/div? display/OpenGL setting?).
 - [x] Junction taps (`schematic_tap`, connect falls back to it), deleting single wires
       (`schematic_delete_wire`), moving wired parts, maze router for all new wires (2026-11-16, checked in
@@ -203,7 +204,7 @@ the passing result in `docs/evidence/`.
       tidied when a part is deleted, add_part/move refuse pins on wires or bodies, drop-offset correction no
       longer overshoots.
 - [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart; power-terminal labels on pins 2 grids apart cover the next one).
-- [ ] 2024 labs as extra cases; one circuit drawn from scratch.
+- [ ] 2024 labs as extra cases (one circuit drawn from scratch: done, scripts/scratch_example.py).
 - [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
       work/e2e/prompt_*.txt):
       - [x] lab5 (2026-11-16): all 8 keys show their digit; 41 turns after a restart. It found 4 tool problems,

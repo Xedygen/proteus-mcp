@@ -832,6 +832,39 @@ class Session:
         time.sleep(0.8)
         self.handle_dialogs()
 
+    def delete_part(self, ref: str, timeout: float = 10.0) -> None:
+        """Delete one part by reference with Tool > Search & Tag (REF equals `ref`, a new search) and the Delete
+        key posted to the canvas.  No mouse, so it works in background mode.  Proteus removes the part's wires
+        too.  Refuses unless the search tags exactly one object."""
+        self.show_schematic()
+        self.command(r"^Search && Tag")
+        d = self._wait_dialog(lambda d: d["title"] == "Search and Tag", timeout)["hwnd"]
+        kids = {win32gui.GetDlgCtrlID(c): c for c, _, _ in _children(d)}
+        user32.SendMessageW(kids[257], win32con.WM_SETTEXT, 0, ctypes.c_wchar_p("REF"))
+        user32.SendMessageW(kids[513], win32con.WM_SETTEXT, 0, ctypes.c_wchar_p(ref))
+        for cid in (1792, 1024):                  # New Search, Equals
+            win32gui.SendMessage(kids[cid], win32con.BM_CLICK, 0, 0)
+        if win32gui.SendMessage(kids[2304], win32con.BM_GETCHECK, 0, 0):   # case sensitive off
+            win32gui.SendMessage(kids[2304], win32con.BM_CLICK, 0, 0)
+        _click_button(d, "Search")
+        time.sleep(1.0)
+        n = win32gui.SendMessage(kids[2048], 0x1004, 0, 0)                 # LVM_GETITEMCOUNT
+        if n != 1:
+            _click_button(d, "Cancel", post=True)
+            time.sleep(0.5)
+            raise GuiError(f"Search & Tag found {n} objects with REF {ref!r}, expected 1; nothing deleted")
+        _click_button(d, "Done", post=True)
+        time.sleep(1.0)
+        if not self.find_menu(r"^Clear Selection").enabled:
+            raise GuiError(f"{ref} was found but not tagged; nothing deleted")
+        canvas = self.edit_window()
+        win32gui.PostMessage(canvas, win32con.WM_KEYDOWN, win32con.VK_DELETE, 0)
+        win32gui.PostMessage(canvas, win32con.WM_KEYUP, win32con.VK_DELETE, 0)
+        time.sleep(1.0)
+        self.handle_dialogs()
+        if self.find_menu(r"^Clear Selection").enabled:
+            raise GuiError(f"{ref} is still tagged after the Delete key; check the sheet")
+
     def save(self, timeout: float = 30.0) -> None:
         """File > Save Project.  Proteus answers with a Save As dialog for projects it opened from a lab
         file; that dialog gets this project's own path, and the overwrite question is answered Yes."""

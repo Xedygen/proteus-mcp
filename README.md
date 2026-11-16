@@ -67,6 +67,11 @@ terminal, switched to Hex Display Mode by the tool, shows the samples; turning t
 all ROM/RAM address, data and control lines, the ROM images copied with the project, and a program calling
 the two FAR routines. Paused, RAM00 shows 34 / CD and RAM01 12 / AB (`docs/evidence/odev2_ram.png`).
 
+`scripts/scratch_example.py` builds a circuit that is in no template. It starts from lab6, deletes its 8251
+(an annotated part, so Proteus itself deletes it and the leftover terminals are tidied), places an 8255A and
+a LED-RED from the libraries, copies the LED seven times, decodes the 8255 at 20H..26H with the 74154 and
+writes 0A5H to port A. LEDs PA0, PA2, PA5 and PA7 light (`docs/evidence/scratch_8255_leds.png`).
+
 Wires are routed by a grid maze router (`route.py`): it never passes through a part body, pin, wire end,
 junction or terminal, never runs along an existing wire, and only crosses wires at right angles. Junction
 taps, wire deletion and moving wired parts were checked in Proteus with `scripts/smoke_junction.py` (its own
@@ -124,7 +129,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `screenshot`, `debug_window` | Main window or a named window; Debug-menu popups while paused |
 | `sim_click`, `screenshot_part` | Press a button / toggle a switch during a run (real mouse, guarded); close-up of one part |
 | `terminal_type`, `terminal_screenshot` | Type into Virtual Terminals during a run; capture what they show |
-| `schematic_place_devices` | Place new device types from the Proteus libraries (GUI, then saved by Proteus) |
+| `schematic_place_devices` | Place new device types from the Proteus libraries (GUI, then saved by Proteus); spots outside the sheet border or on an existing part or wire are refused before Proteus starts |
 | `proteus_background` | Background mode (default): Proteus runs off-screen without taking focus; mouse-based tools pause |
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
 | `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |
@@ -137,11 +142,11 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `schematic_rename_label` | Rename terminals / wire labels (e.g. lab7's YA1..YA6) |
 | `schematic_set_property`, `schematic_set_value` | Properties / value of unannotated parts (annotated ones live in ROOT.CDB, refused) |
 | `schematic_add_generator` | Digital clock generator on a pin, e.g. 9600 Hz on the 8251's TxC/RxC |
-| `schematic_delete`, `schematic_move` | Delete a part or generator with its wires; move a part, dragging its wires along (re-routed where needed) |
+| `schematic_delete`, `schematic_move` | Delete a part or generator with its wires (annotated parts such as an 8251 are deleted by Proteus itself, then the terminals, generators and junctions left at the far ends are tidied); move a part, dragging its wires along (re-routed where needed) |
 | `terminal_mode` | Virtual Terminal options during a run, e.g. Hex Display Mode (real mouse) |
 | `lab_list` | Lab folders with their PDF, template and reference solutions |
 | `schematic_labels` | Offline list of net names (terminals, wire labels) and the pins wired to them |
-| `schematic_check` | Offline: unconnected pins per part, terminals whose partner is missing or misspelled |
+| `schematic_check` | Offline: unconnected pins per part, terminals whose partner is missing or misspelled, parts outside the sheet border (they simulate but cannot be seen or clicked) |
 | `dialog_answer` | Click a button in a Proteus dialog the server does not answer itself |
 | `proteus_edit_component` | Change any part's properties (annotated too, e.g. the 8086 clock) through Proteus's own dialog, for the current session |
 

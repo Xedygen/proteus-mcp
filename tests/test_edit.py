@@ -178,6 +178,28 @@ def test_supply_names_become_power_terminals(proj):
     assert {"+12V", "VEE"} <= texts
 
 
+def test_prune_after_proteus_delete(tmp_path):
+    """Mimic Proteus deleting the lab6 8251 (the part and its wires only), then tidy the far ends."""
+    p = tmp_path / "l6.pdsprj"
+    shutil.copy(TEMPLATE.parents[1] / "lab6" / "taslak.pdsprj", p)
+    ends = schematic.far_ends(p, "U7")
+    sheet = schematic.load(p)
+    u7 = sheet.component("U7")
+    keys = {k for k in u7["pointers"] if k}
+    for o in sheet.objects:
+        if o is not u7 and "pointers" in o and o["type"] != "wire":
+            o["pointers"] = [0 if k in keys else k for k in o["pointers"]]
+    sheet.objects = [o for o in sheet.objects if o is not u7 and not (o["type"] == "wire" and o["start"] in keys)]
+    sheet.reschedule()
+    schematic.save(p, sheet)
+    r = schematic.prune_orphans(p, ends)
+    sheet = consistent(p)
+    assert not any(o["type"] == "instrument" and o["labels"][0]["text"] == "CLOCK" for o in sheet.objects)
+    left = {(o["type"], tuple(o["origin"])) for o in sheet.objects if "origin" in o}
+    assert not left & set(ends)   # the far-end terminals and junctions are all gone
+    assert "8251CS" in r["terminals_removed"]
+
+
 def test_delete_wire_by_point(proj):
     sheet = schematic.load(proj)
     holders = schematic._holders(sheet)
