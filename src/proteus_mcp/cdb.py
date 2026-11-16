@@ -44,16 +44,3 @@ def read_part(cdb: bytes, ref: str, device: str) -> dict | None:
         raise CdbError(f"implausible property length for {ref}")
     return {"start": hits[0], "props_at": pos, "end": pos + 4 + n, "ref": fields[0], "device": fields[1],
             "value": fields[2], "package": fields[3], "props": cdb[pos + 4:pos + 4 + n].decode("latin-1")}
-
-
-def write_part(cdb: bytes, part: dict, value: str | None = None, props: str | None = None) -> bytes:
-    """Return the CDB with this part's value and/or property text replaced."""
-    def p(s: str) -> bytes:
-        raw = s.encode("latin-1")
-        if len(raw) > 255:
-            raise CdbError("field longer than 255 bytes")
-        return bytes([len(raw)]) + raw
-    new_props = (props if props is not None else part["props"]).encode("latin-1")
-    record = (p(part["ref"]) + p(part["device"]) + p(value if value is not None else part["value"])
-              + p(part["package"]) + struct.pack("<I", len(new_props)) + new_props)
-    return cdb[:part["start"]] + record + cdb[part["end"]:]

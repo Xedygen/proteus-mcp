@@ -30,8 +30,10 @@ named nets / GND / VCC per call; schematic_add_terminal for one), schematic_conn
 net, junction), schematic_delete_wire, schematic_add_part, schematic_add_generator, schematic_rename_label,
 schematic_delete / schematic_move (new device types: library_search, then schematic_place_devices) -> firmware_build(source=...)
 (MASM 5.10, errors with line numbers) -> schematic_check (missing wires, lone terminals) -> proteus_launch -> net_of / netlist to check wiring -> sim_start ->
-sim_log, screenshot, screenshot_part, terminal_screenshot, terminal_mode, sim_click, debug_window -> sim_stop
--> proteus_close -> project_export to hand the result over.
+sim_log, screenshot, screenshot_part, sheet_image, terminal_screenshot, terminal_mode, sim_click, debug_window,
+debug_memory -> sim_stop -> proteus_close -> project_export to hand the result over.
+Annotated parts (U1 ...) are edited live: proteus_launch -> proteus_edit_component(ref, {...}, save=True).
+If Proteus shows a dialog the tools do not know, dialog_answer reads or answers it.
 Schematic edits need Proteus closed on that project. Mouse-based tools (sim_click, terminal_mode,
 schematic_place_devices) need proteus_background(false).
 
@@ -197,6 +199,9 @@ def project_open(path: str, name: str | None = None, overwrite: bool = False) ->
         raise ValueError(f"not a file: {src}")
     default = f"{src.parent.name}_{src.stem}"
     stem = re.sub(r"[^A-Za-z0-9_.-]", "_", name or default)  # Proteus 8.6 can fail on non-ASCII paths
+    stem = re.sub(r"\.pdsprj$", "", stem, flags=re.I).strip(".")
+    if not stem:
+        raise ValueError(f"unusable project name {name!r}")
     # each project in its own folder, so files it refers to by name (ROM images 00.bin ...) cannot overwrite
     # another project's; a flat copy left by an older version is still used until it is overwritten
     flat = PROJECTS / f"{stem}.pdsprj"
@@ -210,6 +215,11 @@ def project_open(path: str, name: str | None = None, overwrite: bool = False) ->
         raise ValueError(f"workspace project {stem} is a copy of {origin.read_text(encoding='utf-8')}; pass "
                          "another name or overwrite=True")
     copied = []
+    if overwrite:                     # a fresh copy: no program, netlist or ROM image left from the last one
+        if folder.is_dir():
+            shutil.rmtree(folder)
+        for f in (flat, flat.with_suffix(".source"), _external_exe(flat), _external_asm(flat)):
+            f.unlink(missing_ok=True)
     if not reused:
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dst)
@@ -227,8 +237,10 @@ def project_info(project: str) -> dict:
     files = pdsprj.entries(p)
     fp = pdsprj.firmware_paths(files)
     exe = files.get(fp[1]) if fp else None
+    if not fp and _external_exe(p).exists():         # template without a firmware project: program beside it
+        exe = _external_exe(p).read_bytes()
     return {"project": p.stem, "path": str(p), "entries": {k: len(v) for k, v in files.items()},
-            "firmware_source": fp[0] if fp else None,
+            "firmware_source": fp[0] if fp else (str(_external_asm(p)) if _external_asm(p).exists() else None),
             "firmware_exe_bytes": len(exe) if exe else 0,
             "firmware_load_bytes": _exe_load_size(exe) if exe else None}
 
@@ -236,16 +248,23 @@ def project_info(project: str) -> dict:
 @mcp.tool()
 def project_export(project: str, dest: str) -> dict:
     """Copy a workspace project to `dest` (a .pdsprj path), e.g. OgrenciNo_IsimSoyisim.pdsprj for handing in.
-    Files the project refers to by relative name (ROM images such as 00.bin) are copied next to it."""
+    Files the project refers to by relative name (ROM images such as 00.bin) are copied next to it.
+
+    A project without a firmware project (the 2024 templates) gets its program copied beside it as
+    <dest stem>_8086.exe/.asm, and the 8086's Program File is then set to that file in Proteus: this launches
+    Proteus on the exported copy, edits and saves it, then opens it once more to check the program loads
+    (about a minute; needs Proteus closed on that file). If that fails, the result has a "note" instead."""
     p = _project(project)
     d = Path(dest)
     if d.suffix.lower() != ".pdsprj":
         raise ValueError("dest must end with .pdsprj")
     d.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(p, d)
+    if d.resolve() != p.resolve():
+        shutil.copyfile(p, d)
     extra = []
     for f in pdsprj.referenced_files(p):                 # ROM images etc. must sit next to the project
-        shutil.copyfile(f, d.parent / f.name)
+        if (d.parent / f.name).resolve() != Path(f).resolve():
+            shutil.copyfile(f, d.parent / f.name)
         extra.append(f.name)
     out = {"exported": str(d.resolve()), "bytes": d.stat().st_size, "files_copied": extra}
     if not pdsprj.firmware_paths(pdsprj.entries(p)) and _external_exe(p).exists():
@@ -276,11 +295,7 @@ def _bake_program(project: Path, program: str) -> dict:
     s = gui.Session.launch(project)
     try:
         s.edit_component(cpu, _field_labels(project, ["PROGRAM"]), {"PROGRAM": program})
-        # the dialog changes the schematic (ROOT.DSN); Proteus copies it into its database (ROOT.CDB, which is
-        # what a fresh start reads) when it compiles the design, so run once before saving
-        s.sim("start", settle=2.0)
-        s.sim("stop")
-        s.save()
+        _compile_and_save(s)   # the dialog writes ROOT.DSN; Proteus copies it into ROOT.CDB when it compiles
     finally:
         _end(s)
     s = gui.Session.launch(project)                  # a fresh start must now load the program by itself
@@ -308,11 +323,15 @@ def _end(s: "gui.Session") -> None:
 # ----- firmware ----------------------------------------------------------------------------------
 @mcp.tool()
 def firmware_get_source(project: str) -> str:
-    """The 8086 assembly source stored in the project (FIRMWARE/<name>/main.asm)."""
-    files = pdsprj.entries(_project(project))
+    """The 8086 assembly source stored in the project (FIRMWARE/<name>/main.asm), or for a template without a
+    firmware project the source firmware_build kept beside it."""
+    p = _project(project)
+    files = pdsprj.entries(p)
     fp = pdsprj.firmware_paths(files)
     if not fp or fp[0] not in files:
-        raise ValueError("project has no firmware source")
+        if _external_asm(p).exists():
+            return _external_asm(p).read_text(encoding="cp437", errors="replace")
+        raise ValueError("project has no firmware source (and no program built for it yet)")
     return files[fp[0]].decode("cp437", errors="replace")
 
 
@@ -396,15 +415,6 @@ def schematic_add_part(project: str, like: str, x_grid: float, y_grid: float, ro
     return schematic.add_part(_closed(project), like, x_grid, y_grid, rotation, value, ref, mirror)
 
 
-def _stop(s: gui.Session) -> None:
-    """Close a Proteus this server started for a one-off job, killing it if it will not close."""
-    if s.alive():
-        try:
-            s.close()
-        except gui.GuiError:
-            s.kill()   # only ever this server's own Proteus process
-
-
 @mcp.tool()
 def library_search(query: str, limit: int = 30, category: str | None = None) -> dict:
     """Find device names in Proteus's installed libraries (offline, about 55,000 devices), e.g. "8255",
@@ -442,6 +452,9 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
     p = _closed(project)
     if _session is not None and _session.alive():
         raise ValueError(f"Proteus is running on {_session.project.stem}; call proteus_close first")
+    if gui.BACKGROUND["on"]:
+        raise ValueError("placing devices needs the real mouse; background mode is on. Ask the owner before "
+                         "turning it off with proteus_background(false)")
     _check_device_names(devices)
     comps = schematic.components(p, with_pins=False)
     before = {c["ref"] for c in comps}
@@ -473,10 +486,10 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
                                (round((x + shift[0]) * G), round((y + shift[1]) * G)))
             s.save()
         except BaseException:
-            _stop(s)
+            _end(s)
             p.write_bytes(snapshot)
             raise
-        _stop(s)
+        _end(s)
         new = [c for c in schematic.components(p) if c["ref"] not in before]
         pool, matched = list(new), []
         for dev, x, y in want:
@@ -584,10 +597,10 @@ def schematic_delete(project: str, ref: str) -> dict:
         s.delete_part(ref)
         s.save()
     except BaseException:
-        _stop(s)
+        _end(s)
         p.write_bytes(snapshot)
         raise
-    _stop(s)
+    _end(s)
     left = {c["ref"] for c in schematic.components(p, with_pins=False)}
     if ref in left:
         p.write_bytes(snapshot)
@@ -645,15 +658,17 @@ def schematic_rename_label(project: str, old: str, new: str) -> dict:
 def schematic_set_property(project: str, ref: str, key: str, value: str) -> dict:
     """Set a {KEY=VALUE} property of an UNANNOTATED part (e.g. RES#0010, BUTTON#0007).
 
-    Annotated parts (U1, U2 ...) are refused: Proteus reads their properties from ROOT.CDB, which cannot be
-    rewritten yet (Proteus hangs on a modified CDB). Change those in Proteus's Edit Component dialog."""
+    Annotated parts (U1, U2 ...) are refused: Proteus reads their properties from ROOT.CDB, which only Proteus
+    may write (it hangs on a modified CDB). For those use proteus_launch, then proteus_edit_component with
+    save=True. Keys and values cannot contain braces or line breaks."""
     return schematic.set_property(_closed(project), ref, key, value)
 
 
 @mcp.tool()
 def schematic_set_value(project: str, ref: str, value: str) -> dict:
     """Change the value of an UNANNOTATED part, e.g. a resistor RES#0010 to 330 (verified in Proteus).
-    Annotated parts (U1 ...) are refused for the same ROOT.CDB reason as schematic_set_property."""
+    Annotated parts (U1 ...) are refused for the same ROOT.CDB reason as schematic_set_property: use
+    proteus_edit_component(ref, {"VALUE": ...}, save=True) for those."""
     return schematic.set_value(_closed(project), ref, value)
 
 
@@ -774,12 +789,27 @@ def proteus_edit_component(ref: str, properties: dict[str, str], save: bool = Fa
     s = _require_session()
     if s.sim_state() in ("running", "paused"):
         raise ValueError("stop the simulation first (sim_stop)")
-    res = s.edit_component(ref, _field_labels(s.project, properties), {k: str(v) for k, v in properties.items()})
+    values = {k: str(v) for k, v in properties.items()}
+    res = s.edit_component(ref, _field_labels(s.project, properties), values)
+    refused = {k: res["after"][k] for k, v in values.items() if res["after"].get(k) != v}
+    if refused:                           # e.g. a drop-down list that only takes its own entries
+        raise ToolError(f"the dialog did not take {sorted(refused)} (it shows {refused}); nothing was saved")
     if save:
-        s.sim("start", settle=2.0)
-        s.sim("stop")
-        s.save()
+        _compile_and_save(s)
     return {"ref": ref, "session_only": not save, **res}
+
+
+def _compile_and_save(s: "gui.Session") -> None:
+    """Run the design once, so Proteus copies dialog edits into ROOT.CDB, then save.  A design that does not
+    start is not saved: Proteus would write ROOT.DSN only, which the next load ignores (docs/QUIRKS.md)."""
+    state = s.sim("start", settle=2.0)
+    if state not in ("running", "paused"):
+        errors = s.compiler_errors()
+        raise ToolError("the change is in this Proteus session but was not saved: the design did not start, so "
+                        "Proteus would not store it" + (": " + "; ".join(
+                            f"{r['message']} ({r['source']})" for r in errors) if errors else ""))
+    s.sim("stop")
+    s.save()
 
 
 def _field_labels(project: Path, keys) -> dict[str, list[str]]:

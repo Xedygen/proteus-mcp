@@ -92,8 +92,9 @@ Verified on this machine (Proteus 8.6 SP2, build 23525) unless marked otherwise.
   line) and wire labels, which is how the templates do it.
 - **Annotated parts** (U1, R3, ...) keep their properties in ROOT.CDB, which only Proteus may write: offline
   edits are refused, and `proteus_edit_component(save=True)` changes them through Proteus instead.
-- **New device types** are placed through the Pick Devices dialog with the real mouse; background mode skips
-  that step, as it skips button presses, the pot and terminal hex mode.
+- **New device types** are placed through the Pick Devices dialog with the real mouse. In background mode
+  that tool refuses to run, as do button presses, the pot and terminal hex mode: call
+  `proteus_background(false)` first.
 - **Firmware:** 8086 programs only (MASM 5.10 in DOSBox). PIC/AVR HEX firmware is not handled (unverified,
   no lab needs it).
 - **Generators** are left out of Proteus's netlist (Proteus's behaviour); `net_of` adds them from the sheet.
@@ -225,7 +226,8 @@ Proteus-based assignments (these are what the MCP must handle):
 | 2024 lab 5 to 8 | Same family of topics | Templates and solutions included | Useful as extra test cases |
 
 Labs 1 to 4 and odev1 (both years) ship only `.asm` / `.cpp` files and no Proteus project. They are plain
-assembly exercises. Whether the MCP should cover them is an open decision in [TODO.md](TODO.md).
+assembly exercises with no circuit, so they are out of scope (decided in [TODO.md](TODO.md));
+`firmware_build` still assembles them.
 
 Two things stand out across all of them:
 

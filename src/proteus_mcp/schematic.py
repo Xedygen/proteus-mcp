@@ -21,13 +21,10 @@ def load(project: str | Path) -> dsn.Sheet:
     return dsn.parse(pdsprj.entries(project)["ROOT.DSN"])
 
 
-def save(project: str | Path, sheet: dsn.Sheet, cdb_bytes: bytes | None = None) -> None:
+def save(project: str | Path, sheet: dsn.Sheet) -> None:
     out = sheet.build()
     dsn.parse(out)  # must still parse, with every pointer on a wire
-    changes = {"ROOT.DSN": out}
-    if cdb_bytes is not None:
-        changes["ROOT.CDB"] = cdb_bytes
-    pdsprj.replace(project, changes)
+    pdsprj.replace(project, {"ROOT.DSN": out})
 
 
 def _in_cdb(project, comp: dict) -> bool:
@@ -328,6 +325,8 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     """Attach a terminal to an unconnected pin ("REF.PIN"): `net` = "GND", "VCC"/"POWER", or any net name
     (pins with terminals of the same name are connected, like wire labels).  The terminal is placed two grid
     steps out from the pin, on the side the pin faces."""
+    if distance_grid < 1:
+        raise dsn.DsnError("distance_grid must be at least 1")
     sheet = load(project)
     ref, pin_name = pin.split(".", 1)
     comp, p = find_pin(sheet, ref, pin_name)
@@ -1289,6 +1288,8 @@ def set_property(project: str | Path, ref: str, key: str, value: str) -> dict:
     if _in_cdb(project, comp):
         raise dsn.DsnError(f"{ref} is an annotated part whose properties Proteus reads from ROOT.CDB, which only "
                            "Proteus may write; use proteus_launch, then proteus_edit_component with save=True")
+    if any(c in key + value for c in "{}\n\r") or "=" in key or not key:
+        raise dsn.DsnError("property keys and values cannot contain braces or line breaks (keys also no '=')")
     text = comp["props"].decode("latin-1")
     pat = re.compile(r"\{" + re.escape(key) + r"=[^}]*\}")
     new = f"{{{key}={value}}}"
@@ -1313,8 +1314,11 @@ def set_value(project: str | Path, ref: str, value: str) -> dict:
     sheet = load(project)
     comp = sheet.component(ref)
     if _in_cdb(project, comp):
-        raise dsn.DsnError(f"{ref} is an annotated part whose value Proteus reads from ROOT.CDB, which this "
-                           "tool cannot rewrite yet; change it in Proteus (Edit Component) instead")
+        raise dsn.DsnError(f"{ref} is an annotated part whose value Proteus reads from ROOT.CDB, which only "
+                           "Proteus may write; use proteus_launch, then proteus_edit_component with "
+                           "{\"VALUE\": ...} and save=True")
+    if "\n" in value or "\r" in value or len(value) > 255:
+        raise dsn.DsnError("a value is one line of at most 255 characters")
     comp["labels"][1]["text"] = value
     save(project, sheet)
     return {"ref": ref, "value": value}

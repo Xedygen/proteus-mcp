@@ -199,32 +199,6 @@ class Session:
             raise
         return s
 
-    @classmethod
-    def attach(cls, pid: int, project: str | Path) -> "Session":
-        """Re-attach to a Proteus this package launched earlier (pid recorded by the caller)."""
-        class _P:  # minimal Popen stand-in
-            def __init__(self, pid):
-                self.pid, self.returncode = pid, None
-                self._h = win32api.OpenProcess(win32con.SYNCHRONIZE | win32con.PROCESS_TERMINATE
-                                               | win32con.PROCESS_QUERY_INFORMATION, False, pid)
-
-            def poll(self):
-                import win32event
-                if win32event.WaitForSingleObject(self._h, 0) == win32event.WAIT_OBJECT_0:
-                    self.returncode = 0
-                    return 0
-                return None
-
-            def kill(self):
-                win32api.TerminateProcess(self._h, 1)
-
-            def wait(self, timeout=None):
-                import win32event
-                win32event.WaitForSingleObject(self._h, int((timeout or 30) * 1000))
-        s = cls(Path(project).resolve(), _P(pid))  # type: ignore[arg-type]
-        s.main = next(h for h in _windows(pid) if win32gui.GetClassName(h).startswith("LX_APPLN"))
-        return s
-
     def alive(self) -> bool:
         return self.proc.poll() is None
 
@@ -515,6 +489,10 @@ class Session:
         if lv_parent is None:
             raise GuiError("Simulation Log popup not found")
         lv = next((c for c, k, _ in _children(lv_parent) if k == "SysListView32"), None)
+        if lv is None:
+            if resume:
+                self.sim("start")
+            raise GuiError("Simulation Log popup has no list")
         rows = _listview_rows(lv)
         if resume:
             self.sim("start")
@@ -694,6 +672,10 @@ class Session:
             win32gui.PostMessage(self.main, win32con.WM_COMMAND, self._EXPORT_BITMAP, 0)
             d = self._wait_dialog(lambda d: d["title"] == "Export Bitmap", 10)
             ids = {win32gui.GetDlgCtrlID(c): c for c, _, _ in _children(d["hwnd"])}
+            needed = (self._BMP_SHEET, self._BMP_DPI[dpi], self._BMP_DISPLAY_COLOURS, self._BMP_TO_FILE)
+            if any(i not in ids for i in needed):
+                _click_button(d["hwnd"], "Cancel", post=True)
+                raise GuiError("Export Bitmap dialog does not have the expected controls; cancelled it")
             for i in (self._BMP_SHEET, self._BMP_DPI[dpi], self._BMP_DISPLAY_COLOURS):
                 win32gui.SendMessage(ids[i], win32con.BM_CLICK, 0, 0)
             if win32gui.SendMessage(ids[self._BMP_TO_FILE], win32con.BM_GETCHECK, 0, 0):
@@ -754,18 +736,6 @@ class Session:
             win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
         time.sleep(0.3)
 
-    def mouse(self, x: int, y: int, action: str = "click", hold: float = 0.0) -> None:
-        """Real mouse input at screen pixel (x, y): 'click', 'down', 'up', 'move'."""
-        self.foreground()
-        win32api.SetCursorPos((x, y))
-        time.sleep(0.15)
-        if action in ("click", "down"):
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-        if action == "click":
-            time.sleep(max(hold, 0.08))
-        if action in ("click", "up"):
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-
     def sheet_frame(self, size: tuple[int, int] | None = None) -> tuple[int, int, int, int]:
         """Zoom to the entire sheet and return the sheet border's screen rectangle (left, top, right, bottom).
 
@@ -801,18 +771,6 @@ class Session:
         x = left + (point[0] + w / 2) / w * (right - left)
         y = top + (h / 2 - point[1]) / h * (bottom - top)
         return round(x), round(y)
-
-    def canvas_click(self, x: int, y: int, hold: float = 0.3) -> None:
-        """Press and release the left button at screen pixel (x, y) by posting messages to the editing canvas.
-        Needs neither focus nor the real mouse, so it also works from a background process."""
-        canvas = self.edit_window()
-        cx, cy = win32gui.ScreenToClient(canvas, (x, y))
-        lp = win32api.MAKELONG(cx & 0xFFFF, cy & 0xFFFF)
-        win32gui.PostMessage(canvas, win32con.WM_MOUSEMOVE, 0, lp)
-        time.sleep(0.05)
-        win32gui.PostMessage(canvas, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lp)
-        time.sleep(hold)
-        win32gui.PostMessage(canvas, win32con.WM_LBUTTONUP, 0, lp)
 
     def real_click(self, x: int, y: int, hold: float = 0.3, button: str = "left") -> None:
         """Real mouse press at screen pixel (x, y) on this Proteus.  Proteus actuators read the real mouse,

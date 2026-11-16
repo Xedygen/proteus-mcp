@@ -149,9 +149,11 @@ holds the *second* reference to it. When one object completes several wires they
 
 Starts with a small header and `ROOT` / `Master Sheet`, then pin names, parts (reference, device, package)
 and their `{KEY=VALUE}` properties as plain text. Annotated parts take their properties and values from here,
-not from ROOT.DSN. Proteus 8.6 hangs on load when this file is rewritten, so the tools never change it:
-property and value edits are limited to parts without a CDB record, and parts placed through the GUI get their
-record from Proteus's own save.
+not from ROOT.DSN. Proteus 8.6 hangs on load when this file is rewritten, so the tools never write it
+directly: file-level property and value edits are limited to parts without a CDB record. Annotated parts are
+edited through Proteus's own Edit Component dialog (`proteus_edit_component`), and Proteus rewrites ROOT.CDB
+when it compiles the design (a simulation start), which is why that tool starts and stops the simulation
+before saving. Parts placed through the GUI get their record the same way.
 
 ## Status 2026-11-15 (supersedes the notes above where they differ)
 

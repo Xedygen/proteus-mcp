@@ -123,6 +123,24 @@ def parse_log(log: str) -> tuple[list[dict], list[dict]]:
     return errors, warnings
 
 
+def _ascii_dir(d: Path, temporary: bool) -> Path:
+    """An ASCII path for directory `d`: its 8.3 short name, else (short names off) a new folder under the
+    workspace, in which case a temporary `d` is removed."""
+    try:
+        import win32api
+        short = Path(win32api.GetShortPathName(str(d)))
+        if str(short).isascii():
+            return short
+    except Exception:
+        pass
+    alt = Path(tempfile.mkdtemp(prefix="pmcp_asm_", dir=paths.WORK_DIR))
+    if not str(alt).isascii():
+        raise RuntimeError(f"no ASCII folder to build in (tried {d} and {alt}); set PROTEUS_MCP_WORK to one")
+    if temporary:
+        shutil.rmtree(d, ignore_errors=True)
+    return alt
+
+
 def build(source: str, *, debug_info: bool = False, timeout: float = 60.0, keep_dir: str | None = None) -> BuildResult:
     """Assemble and link one source file.  Returns the EXE bytes on success.
 
@@ -133,6 +151,8 @@ def build(source: str, *, debug_info: bool = False, timeout: float = 60.0, keep_
     t0 = time.monotonic()
     tmp = (Path(keep_dir) if keep_dir else Path(tempfile.mkdtemp(prefix="pmcp_asm_"))).resolve()
     tmp.mkdir(parents=True, exist_ok=True)
+    if not str(tmp).isascii():          # DOSBox's config takes ASCII paths (e.g. a Turkish user name in TEMP)
+        tmp = _ascii_dir(tmp, keep_dir is None)
     try:
         for exe in ("MASM.EXE", "LINK.EXE"):
             shutil.copy2(paths.MASM_DIR / exe, tmp / exe)
