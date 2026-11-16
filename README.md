@@ -7,8 +7,10 @@ The acceptance target is the YTU BLM3061 (Mikroişlemci Sistemleri ve Assembly D
 `tanım.pdf` and its `taslak.pdsprj`, Claude should be able to produce a working `.pdsprj` and show that it meets
 the "İstenenler" list.
 
-Status: **in progress.** [TODO.md](TODO.md) is the work order, [docs/FORMAT.md](docs/FORMAT.md) the file
-format notes.
+Status: **usable.** Every 2025 Proteus lab and odev2 has been completed through these tools by a fresh Claude
+session (below). [TODO.md](TODO.md) records the work and what still needs the owner,
+[docs/FORMAT.md](docs/FORMAT.md) the file format notes, [docs/QUIRKS.md](docs/QUIRKS.md) the Proteus and MASM
+quirks the tools work around.
 
 ## Status
 
@@ -21,7 +23,9 @@ Working and tested through a real MCP client (`scripts/smoke_mcp.py`), on this m
 - get Proteus's own netlist and ask which pins are on a net;
 - **edit schematics** without the GUI: list parts and pins, wire two pins together, attach GND / power /
   named-net terminals, change properties and values. Edits are written straight into the project file and
-  were confirmed in Proteus 8.6 (opened without new warnings, connections present in Proteus's netlist).
+  were confirmed in Proteus 8.6 (opened without new warnings, connections present in Proteus's netlist);
+- place new device types from the libraries, delete and move parts, change annotated parts (8086 clock,
+  program file, values) through Proteus's own dialog, and render the sheet as an image to check the layout.
 
 Proteus was reinstalled on 2026-11-15; simulation of the 8086 labs now works (the earlier install could not
 drive 8086 I/O, see `docs/QUIRKS.md`).
@@ -77,8 +81,25 @@ junction or terminal, never runs along an existing wire, and only crosses wires 
 taps, wire deletion and moving wired parts were checked in Proteus with `scripts/smoke_junction.py` (its own
 netlist shows the intended nets; the file opens without a dialog).
 
-Not built yet: editing annotated parts' properties/values (ROOT.CDB), tidy layout of crowded terminals,
-bus wires drawn between pins.
+## Limitations
+
+Verified on this machine (Proteus 8.6 SP2, build 23525) unless marked otherwise.
+
+- **Scope:** the Digital Oscilloscope draws no trace on this install, even for a plain clock generator, so
+  waveforms are checked with voltmeters or slowed programs. Whether it works on other installs is unverified
+  (TODO.md, Needs the owner).
+- **Bus wires** are not drawn between pins. Buses are joined by named terminals (`AD0` joins the `AD[0..7]`
+  line) and wire labels, which is how the templates do it.
+- **Annotated parts** (U1, R3, ...) keep their properties in ROOT.CDB, which only Proteus may write: offline
+  edits are refused, and `proteus_edit_component(save=True)` changes them through Proteus instead.
+- **New device types** are placed through the Pick Devices dialog with the real mouse; background mode skips
+  that step, as it skips button presses, the pot and terminal hex mode.
+- **Firmware:** 8086 programs only (MASM 5.10 in DOSBox). PIC/AVR HEX firmware is not handled (unverified,
+  no lab needs it).
+- **Generators** are left out of Proteus's netlist (Proteus's behaviour); `net_of` adds them from the sheet.
+- Only Proteus 8.6 project files (`FILEVER` 814) have been decoded. Other versions are untested; there is no
+  explicit version check, so an edit on such a file may fail with a parse error.
+- The plain assembly labs (1 to 4, odev1) are out of scope: they have no Proteus project.
 
 ## Install
 
@@ -176,8 +197,12 @@ The finished project is a normal `.pdsprj`; open it in Proteus to look at or pre
 | `README.md` | This file |
 | `TODO.md` | Work order by milestone, and things needed from the owner |
 | `docs/FORMAT.md` | What is known about the Proteus 8.6 project file format |
+| `docs/QUIRKS.md` | Proteus, model and MASM 5.10 quirks (also served by the `quirks` tool) |
+| `docs/evidence/` | Screenshots from the worked examples |
 | `src/proteus_mcp/` | The server package |
-| `scripts/` | Lab download, sample extraction, format exploration |
+| `tests/` | Tests that run without Proteus (`.venv\Scripts\python.exe -m pytest -q`) |
+| `scripts/` | Worked lab examples, smoke tests, lab download and sample extraction |
+| `e2e/` | Prompts and client config for the fresh-session acceptance runs |
 | `tools/masm/` | MASM 5.10 toolchain for 8086 firmware |
 | `labs/2024/`, `labs/2025/` | Lab material pulled from the YTU archive repo (not in git) |
 
@@ -239,71 +264,26 @@ format with no public specification, and `ROOT.DSN` and `ROOT.CDB` must stay con
 
 Proteus 8.6 has no official automation API.
 
-## Existing Proteus MCPs on GitHub
+## Prior art
 
-| Repo | How it works | Usable for 8.6? |
+| Repo | How it works | Why it was not used as is |
 | --- | --- | --- |
-| [chen0416ccc-cpu/Proteus-MCP](https://github.com/chen0416ccc-cpu/Proteus-MCP) | Python. Semantic circuit model, writes `.pdsprj` files directly, and injects into the running process with Frida for live edits and simulation | **Not as is.** File writing accepts only Proteus 9 containers (`FILEVER` 900 to 907). The in-process bridge is pinned to one build, 9.0.40482, by module hash and refuses anything else. Firmware support is Keil C51 only, no 8086. Needs Python 3.11+ |
-| [jackmaikr4-sketch/keil-proteus-automation-skill-mcp](https://github.com/jackmaikr4-sketch/keil-proteus-automation-skill-mcp) | TypeScript + PowerShell. Drives the Proteus window through Windows UI Automation: finds menu commands by name, reads enabled state to tell running / paused / stopped, sets part properties through the Edit Component dialog, takes screenshots | **Approach carries over.** It does not depend on the Proteus build. It cannot draw schematics |
-| [3023073486/agent-Proteus](https://github.com/3023073486/agent-Proteus) | Thin wrapper that forwards to other desktop automation backends | Little to reuse |
+| [chen0416ccc-cpu/Proteus-MCP](https://github.com/chen0416ccc-cpu/Proteus-MCP) | Writes `.pdsprj` files directly, live edits through Frida | Proteus 9 containers only (`FILEVER` 900 to 907), bridge pinned to build 9.0.40482, no 8086 firmware. Its DSN/CDB notes were the starting point for decoding 8.6 (credited in `dsn.py`) |
+| [jackmaikr4-sketch/keil-proteus-automation-skill-mcp](https://github.com/jackmaikr4-sketch/keil-proteus-automation-skill-mcp) | Drives the Proteus window through UI Automation | Cannot draw schematics; its menu-driven simulation control and Edit Component approach carried over (no code copied) |
 
-Conclusion: nothing can be dropped in for 8.6. The plan is to build our own server and borrow designs:
+## How it works
 
-- from chen's project: the semantic model, the `.LIB` library reader, the "write, then read back and verify"
-  discipline, and its documentation of the DSN/CDB layout as a starting point for decoding the 8.x format;
-- from the keil project: menu-driven simulation control and dialog handling.
+Python MCP server over stdio (official `mcp` SDK, managed with `uv`), Windows only. Three layers:
 
-Both declare an MIT licence. Confirm that before copying any code, and keep attribution if code is reused.
+1. **Project files, offline.** A `.pdsprj` is opened as a ZIP in a workspace copy; `dsn.py` parses and rebuilds
+   ROOT.DSN byte for byte, `schematic.py` edits it (wires from a grid maze router, terminals, labels, part
+   copies, generators) and `netlist.py` reads Proteus's own netlist. Templates are never written.
+2. **Firmware.** The 8086 source is assembled with the course's MASM 5.10 in headless DOSBox and the DOS EXE
+   is stored where the project's firmware entry expects it.
+3. **Proteus GUI.** `gui.py` starts its own Proteus instance (background mode keeps it off-screen) and drives
+   it through menu commands and dialogs: simulation control, logs, Export Bitmap sheet images, Debug popups
+   read as text, Edit Component, Pick Devices, button presses and terminal typing. Unknown dialogs are
+   reported, never clicked through.
 
-## Design
-
-Python MCP server over stdio (official `mcp` SDK, managed with `uv`), Windows only.
-
-Three layers:
-
-1. **Project file layer (offline, no GUI).** Open a `.pdsprj` as a ZIP. Read parts, pins, nets and properties.
-   Replace `main.asm` and the built firmware. Edit part properties. Always work on a copy, never the template.
-2. **Schematic editing layer.** Add wires, net labels, terminals and parts. This is the hard part and has two
-   candidate routes, to be settled by a spike (TODO phase 1):
-   - *Route A, write `ROOT.DSN` / `ROOT.CDB` directly.* Fast, repeatable, no screen needed. Requires decoding the
-     8.6 binary format. The 22 sample projects in `labs/` (template and solution pairs) are the decoding corpus.
-   - *Route B, drive the ISIS window.* Keyboard and mouse automation against the real editor. No format work,
-     but slower, sensitive to window state, and it takes over the desktop while it runs.
-   Net labels and terminals are preferred over long drawn wires either way, since they make connections by name.
-3. **Simulation and observation layer (GUI).** Start, pause, stop through menu commands. Press buttons and type
-   into virtual terminals. Read back results with screenshots (Claude reads images), the simulation log, and where
-   possible text from popup windows (virtual terminal, memory contents).
-
-Firmware build: assemble the 8086 source outside Proteus with the course's MASM 5.10, run inside DOSBox without
-a visible prompt (mount a build folder, run `masm` and `link` with output redirected to a log, exit), then place
-the resulting DOS EXE where the project expects it. The 8086 model loads DOS EXE files, which is also what the
-lab templates ship. One thing to watch: the templates were written for MASM32's `ml.exe` (MASM 6), so a source
-file may occasionally use syntax MASM 5.10 rejects. The firmware spike in TODO checks this on real lab code.
-
-The same DOSBox + `debug.exe` pair can run and inspect the plain assembly labs (lab 1 to 4) if those are in scope.
-
-### Original tool plan (see Tools above for what exists)
-
-| Group | Tools |
-| --- | --- |
-| Environment | `proteus_doctor` (install, version, assembler, running instances) |
-| Library | `library_search`, `device_info` (pins, default properties) |
-| Project | `project_open`, `project_copy`, `project_summary`, `netlist_read`, `project_save_as` |
-| Schematic | `component_add`, `component_set_property`, `wire_connect`, `label_add`, `terminal_add`, `component_delete`, `schematic_screenshot` |
-| Firmware | `firmware_set_source`, `firmware_build`, `firmware_attach` |
-| Simulation | `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` |
-| Interaction | `button_press`, `terminal_type`, `pot_set` |
-| Observation | `screenshot`, `terminal_read`, `memory_read`, `probe_read` |
-| Verification | `net_check` (is pin X on net Y), `erc_run` |
-
-## Known risks
-
-- **The schematic format is undocumented.** If Route A proves too costly, the project falls back to Route B and
-  becomes slower and less reliable.
-- **Reading results depends on the screen.** Scope traces and 7-segment displays can only be checked from
-  screenshots. Virtual terminal and memory windows may or may not expose their text.
-- **GUI automation needs the desktop.** While a simulation run is being driven, the mouse and keyboard are in use.
-- **Simulation is not real time.** The 8086 model runs slower than wall clock, so timing checks (100 Hz sine,
-  9600 baud) need simulated time, not elapsed time.
-- **Model quirks.** The lab sheets already mention one: after `IN AL, DATA_PORT` on the 8251, run `SHR AL, 1`.
-  Notes like this need to live somewhere Claude will see them.
+Results are checked against Proteus itself: its netlist for connectivity, its simulation log for the loaded
+program, and images or popup text for what the circuit does.

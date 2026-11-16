@@ -177,7 +177,7 @@ the passing result in `docs/evidence/`.
 
 ## Milestone 7: wrap up
 
-- [~] README: replace the planning text with what exists, how to install, how to configure both clients, a
+- [x] README: replace the planning text with what exists, how to install, how to configure both clients, a
       worked example prompt, and a limitations section that separates verified from unverified.
 - [x] `docs/QUIRKS.md`: model quirks and MASM 5.10 restrictions that Claude must know when writing lab code.
 - [x] (tests/test_dsn.py, 60 tests) Tests that run without Proteus (parser round-trip, netlist on the samples when `labs/` is present,
