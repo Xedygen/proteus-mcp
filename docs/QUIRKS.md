@@ -44,6 +44,15 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   device four times to get U4:A..U4:D in one package, or copy a gate with schematic_add_part (new package).
   The generic single-gate OR / AND / NOT devices avoid that.
 - **Memory Contents** popups (62256, 27C128) show 2CH bytes per row: count offsets from the row label.
+- **Templates without a firmware project** (2024 `proteus_sablon.pdsprj`): the 8086 still points at a stale
+  temp path. Proteus links programs through ROOT.CDB, which only its own dialogs may change; a changed
+  property is saved into ROOT.DSN but not ROOT.CDB, so it lasts one Proteus session. firmware_build keeps the
+  EXE beside the project (<name>_8086.exe) and proteus_launch sets the 8086's Program File to it through the
+  Edit Component dialog every time. Editing an annotated part's ROOT.DSN properties directly, or removing
+  ROOT.CDB, makes Proteus crash at load.
+- **Crash-report prompt:** after a Proteus crash, the next start asks ("Reports Uploading") whether to send
+  reports to Labcenter; the tools always answer No.
+- **Simulation Log** is a separate top-level popup in some projects (2024 templates), docked in others.
 - **Virtual Terminal:** raw bytes show as characters; `terminal_mode("Hex Display Mode")` switches to hex.
 - **8086 model:** internal memory 0x00000-0x0FFFF (DBG_MEM_SIZE); the program loads at 0800:0000, so the
   interrupt vector table at 0000:0000 is writable RAM. Keep a stack inside your own segment.

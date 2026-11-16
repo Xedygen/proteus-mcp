@@ -487,12 +487,20 @@ class Session:
                 return c
         return None
 
+    def _log_window(self) -> int | None:
+        """The Simulation Log popup: docked as a child of the main window in most projects, a separate
+        top-level window in others (seen in the 2024 templates)."""
+        h = self.find_child("Simulation Log")
+        if h is None:
+            h = next((w for w in _windows(self.pid) if win32gui.GetWindowText(w) == "Simulation Log"), None)
+        return h
+
     def sim_log(self) -> list[dict]:
         """Rows of the Simulation Log.  The log popup only exists while the simulation is paused (or after it
         was opened during a pause); if it is not open, the simulation is paused, the popup opened, and the
         previous state restored."""
         import warnings
-        lv_parent = self.find_child("Simulation Log")
+        lv_parent = self._log_window()
         resume = False
         if lv_parent is None:
             state = self.sim_state()
@@ -503,7 +511,7 @@ class Session:
                 raise GuiError("simulation log is only reachable while a simulation is running or paused")
             self.command(r"Simulation Log$")
             time.sleep(1.0)
-            lv_parent = self.find_child("Simulation Log")
+            lv_parent = self._log_window()
         if lv_parent is None:
             raise GuiError("Simulation Log popup not found")
         lv = next((c for c, k, _ in _children(lv_parent) if k == "SysListView32"), None)
@@ -739,6 +747,67 @@ class Session:
                 win32api.SetCursorPos((l + 40, t + 10))   # title bar: off the drawing
         finally:
             win32gui.SetWindowPos(self.main, win32con.HWND_NOTOPMOST, 0, 0, 0, 0, flags)
+
+    def edit_component(self, ref: str, props: dict[str, str], min_text: int = 0, timeout: float = 10.0) -> str:
+        """Set {KEY=VALUE} properties of any part, annotated or not, through Proteus's own Edit Component
+        dialog (Edit > Find/Edit Component, "Edit all properties as text"), so Proteus keeps ROOT.CDB
+        consistent.  Returns the property text Proteus accepted.  Save the project afterwards."""
+        def get_text(h):
+            n = win32gui.SendMessage(h, win32con.WM_GETTEXTLENGTH, 0, 0)
+            buf = ctypes.create_unicode_buffer(n + 1)
+            user32.SendMessageW(h, win32con.WM_GETTEXT, n + 1, buf)
+            return buf.value
+
+        self.show_schematic()
+        self.command(r"^Edit Component	")        # the label is "Find/Edit Component", split at the slash
+        d = self._wait_dialog(lambda d: d["title"] == "Find & Edit Component", timeout)["hwnd"]
+        edit = next(c for c, cls, _ in _children(d) if cls == "Edit")
+        user32.SendMessageW(edit, win32con.WM_SETTEXT, 0, ctypes.c_wchar_p(ref))
+        _click_button(d, "OK")
+        try:
+            d = self._wait_dialog(lambda d: d["title"] == "Edit Component", timeout)["hwnd"]
+        except GuiError:
+            for x in self.dialogs():
+                _click_button(x["hwnd"], "OK") or _click_button(x["hwnd"], "Cancel")
+            raise GuiError(f"no part {ref!r} to edit")
+        props = dict(props)
+        program = props.pop("PROGRAM", None)
+        if program is not None:
+            # the Program File field (control 256) is the reliable way to set a CPU's program
+            field = next((c for c, cls, _ in _children(d) if cls == "Edit" and win32gui.GetDlgCtrlID(c) == 256), None)
+            if field is None:
+                _click_button(d, "Cancel")
+                raise GuiError(f"{ref} has no Program File field")
+            user32.SendMessageW(field, win32con.WM_SETTEXT, 0, ctypes.c_wchar_p(program))
+        accepted = ""
+        if props:
+            _click_button(d, "Edit all properties as text")
+            box = next((c for c, cls, _ in _children(d) if cls == "Edit" and win32gui.GetDlgCtrlID(c) == 1025), None)
+            if box is None:
+                _click_button(d, "Cancel")
+                raise GuiError("Edit Component: property text box not found")
+            # Proteus fills the box gradually: wait until its length stops changing
+            last, stable, t0 = -1, 0, time.monotonic()
+            while stable < 3 and time.monotonic() - t0 < 6:
+                n = win32gui.SendMessage(box, win32con.WM_GETTEXTLENGTH, 0, 0)
+                stable = stable + 1 if n == last else 0
+                last = n
+                time.sleep(0.3)
+            text = get_text(box).replace("\r\n", "\n")
+            if len(text) < min_text:
+                _click_button(d, "Cancel")
+                raise GuiError(f"Edit Component showed only {len(text)} characters of {ref}'s properties (expected "
+                               f"about {min_text}); nothing was changed")
+            for key, value in props.items():
+                line = f"{{{key}={value}}}"
+                pat = re.compile(r"\{" + re.escape(key) + r"=[^}\n]*\}")
+                text = pat.sub(lambda m: line, text, count=1) if pat.search(text) else text.rstrip("\n") + "\n" + line
+            user32.SendMessageW(box, win32con.WM_SETTEXT, 0, ctypes.c_wchar_p(text.replace("\n", "\r\n")))
+            accepted = get_text(box).replace("\r\n", "\n")
+        _click_button(d, "OK", post=True)
+        time.sleep(1.0)
+        self.handle_dialogs()
+        return accepted
 
     def place_device(self, device: str, frame, size, xy, timeout: float = 10.0) -> None:
         """Library > Pick parts: search `device`, pick the exact match, and place it at sheet point `xy`

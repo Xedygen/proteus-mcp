@@ -104,7 +104,23 @@ def _expected_load(project: Path) -> int | None:
     files = pdsprj.entries(project)
     fp = pdsprj.firmware_paths(files)
     exe = files.get(fp[1]) if fp else None
+    if exe is None and _external_exe(project).exists():
+        exe = _external_exe(project).read_bytes()
     return _exe_load_size(exe) if exe else None
+
+
+def _external_exe(project: Path) -> Path:
+    """Program of a project without a firmware project (see firmware_build), kept beside the project."""
+    return project.with_name(project.stem + "_8086.exe")
+
+
+def _external_asm(project: Path) -> Path:
+    return project.with_name(project.stem + "_8086.asm")
+
+
+def _cpu_ref(project: Path) -> str | None:
+    return next((c["ref"] for c in schematic.components(project, with_pins=False)
+                 if c["device"].upper() in ("8086", "8088")), None)
 
 
 # ----- environment -----------------------------------------------------------------------------
@@ -221,7 +237,16 @@ def project_export(project: str, dest: str) -> dict:
     for f in pdsprj.referenced_files(p):                 # ROM images etc. must sit next to the project
         shutil.copyfile(f, d.parent / f.name)
         extra.append(f.name)
-    return {"exported": str(d.resolve()), "bytes": d.stat().st_size, "files_copied": extra}
+    out = {"exported": str(d.resolve()), "bytes": d.stat().st_size, "files_copied": extra}
+    if not pdsprj.firmware_paths(pdsprj.entries(p)) and _external_exe(p).exists():
+        # a template without a firmware project (2024): hand the program over beside the project
+        for f, suffix in ((_external_exe(p), "_8086.exe"), (_external_asm(p), "_8086.asm")):
+            if f.exists():
+                shutil.copyfile(f, d.with_name(d.stem + suffix))
+                extra.append(d.stem + suffix)
+        out["note"] = (f"the project has no firmware project; its program is {d.stem}_8086.exe beside it. In "
+                       "Proteus, open the 8086 (Edit Component) and set Program File to that file once, then save.")
+    return out
 
 
 # ----- firmware ----------------------------------------------------------------------------------
@@ -247,25 +272,32 @@ def firmware_build(project: str, source: str | None = None) -> dict:
         raise ValueError("this project is open in Proteus; call proteus_close first")
     files = pdsprj.entries(p)
     fp = pdsprj.firmware_paths(files)
-    created = False
     if not fp:
-        # e.g. the 2024 templates: an 8086 but no firmware project; create the standard one
-        if not any(c["device"].upper() in ("8086", "8088") for c in schematic.components(p, with_pins=False)):
-            raise ValueError("project has no firmware project and no 8086 to attach one to")
-        if source is None:
-            raise ValueError("project has no firmware project yet; pass `source` to create one")
-        pdsprj.replace(p, pdsprj.new_firmware_project("8086"))
-        files = pdsprj.entries(p)
-        fp = pdsprj.firmware_paths(files)
-        created = True
+        # e.g. the 2024 templates: an 8086 whose firmware project was removed.  Proteus only re-links a
+        # program through its own dialogs (ROOT.CDB), so keep the EXE next to the project and attach it
+        # through the Edit Component dialog each time proteus_launch starts Proteus.
+        if _cpu_ref(p) is None:
+            raise ValueError("project has no firmware project and no 8086 to run a program on")
+        text = source if source is not None else (_external_asm(p).read_text(encoding="cp437")
+                                                  if _external_asm(p).exists() else None)
+        if text is None:
+            raise ValueError("project has no firmware project yet; pass `source`")
+        res = firmware.build(text)
+        out = res.as_dict()
+        if res.ok:
+            _external_exe(p).write_bytes(res.exe)
+            _external_asm(p).write_bytes(firmware.normalise_source(text))
+            out["stored"] = {"exe": str(_external_exe(p)), "source": str(_external_asm(p)),
+                             "load_bytes": _exe_load_size(res.exe),
+                             "note": "this template has no firmware project: the program is kept next to the "
+                                     "project and attached to the 8086 whenever proteus_launch starts Proteus"}
+        return out
     text = source if source is not None else files[fp[0]].decode("cp437", errors="replace")
     res = firmware.build(text)
     out = res.as_dict()
     if res.ok:
         pdsprj.replace(p, {fp[0]: firmware.normalise_source(text), fp[1]: res.exe})
         out["stored"] = {"source": fp[0], "exe": fp[1], "load_bytes": _exe_load_size(res.exe)}
-        if created:
-            out["created_firmware_project"] = True
     return out
 
 
@@ -485,9 +517,15 @@ def proteus_launch(project: str) -> dict:
     global _session
     if _session is not None and _session.alive():
         raise ValueError(f"Proteus is already running on {_session.project.stem}; call proteus_close first")
-    _session = gui.Session.launch(_project(project))
-    return {"project": project, "pid": _session.pid, "startup_warnings": sorted(set(_session.warnings)),
-            "title": gui.win32gui.GetWindowText(_session.main)}
+    p = _project(project)
+    _session = gui.Session.launch(p)
+    out = {"project": project, "pid": _session.pid, "startup_warnings": sorted(set(_session.warnings)),
+           "title": gui.win32gui.GetWindowText(_session.main)}
+    if not pdsprj.firmware_paths(pdsprj.entries(p)) and _external_exe(p).exists() and _cpu_ref(p):
+        # set for this Proteus session only (Proteus keeps the stored path in ROOT.CDB)
+        _session.edit_component(_cpu_ref(p), {"PROGRAM": str(_external_exe(p))})
+        out["attached_program"] = str(_external_exe(p))
+    return out
 
 
 @mcp.tool()
