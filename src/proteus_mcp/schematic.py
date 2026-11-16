@@ -12,7 +12,7 @@ import struct
 from pathlib import Path
 
 from . import cdb, dsn, pdsprj, route
-from .devices import find_pin, pins
+from .devices import GLYPH_LENGTH, find_pin, pins
 
 GRID = dsn.GRID
 
@@ -186,9 +186,6 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
             raise dsn.DsnError(f"{label} is a bus pin; bus connections are not supported yet")
         if pin["hidden"]:
             raise dsn.DsnError(f"{label} is a hidden power pin; Proteus connects it to its power net itself")
-    template = next((w for w in sheet.wires() if w["flags"] == 0), None)
-    if template is None:
-        raise dsn.DsnError("no existing wire to copy the wire style from")
     key = sheet.new_key()
     if via_x_grid is not None:
         points = _route_pins(pa, pb, round(via_x_grid * GRID))
@@ -236,7 +233,7 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
     first_a = (order[id(ca)], pa["slot"]) <= (order[id(cb)], pb["slot"])
     if not first_a:
         points = points[::-1]
-    sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": template["style"],
+    sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": _wire_style(sheet, 0),
                           "labels": [], "points": points})
     ca["pointers"][pa["slot"]] = key
     cb["pointers"][pb["slot"]] = key
@@ -260,7 +257,13 @@ _TERMINALS = {
     ("$TERGROUND", None): ("00000000", (0, GRID), (-254000, -508000), "000000000800"),
     ("$TERPOWER", None): ("00000000", (0, -GRID), (-254000, 508000), "000000000800"),
 }
-_ATTRIBUTES = {"$TERDEFAULT": "090000000000", "$TERBUS": "090000000000", "$TERGROUND": "0d0000000000", "$TERPOWER": "0d0000000000"}
+# Default styles: identical in every sample project (3401 wires, 1751 bus wires, 827 terminal labels, 1687 wire
+# labels across 28 files), used when the file has nothing of the kind to copy from.
+_WIRE_STYLE = {0: b"\x00\xc0\x9e\x00\x00\x00@\x00\x00\x01\xff\xff\xff\x00\xff\xff\xff\x00\x02\x7fWIRE\x00",
+               1: b"\x00PS\x02\x00\x00\x00\xc0\x00\x01\xff\xff\xff\x00\xff\xff\xff\x00\x02\x7fBUS WIRE\x00"}
+_TERMINAL_LABEL_STYLE = b"0\xe0\x03\x00\xc0\x19\x03\x00\x00\x00\x00\x00\x01 \xff\x01Default Font\x00TERMINAL LABEL\x00\x00\x00\x00\x00"
+_WIRE_LABEL_STYLE = b"0\xe0\x03\x00\xc0\x19\x03\x00\x00\x00\x00\x00\x01 \xff\x01Default Font\x00WIRE LABEL\x00\x00\x00\x00\x00"
+_ATTRIBUTES = {"$TERDEFAULT": "090000000000","$TERBUS": "090000000000", "$TERGROUND": "0d0000000000", "$TERPOWER": "0d0000000000"}
 
 
 def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2) -> dict:
@@ -303,19 +306,15 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
             if distance == distance_grid + 4:
                 raise
     template = next((o for o in sheet.objects if o["type"] == "terminal"), None)
-    if template is None:
-        raise dsn.DsnError("no terminal in this file to copy the label style from")
+    label_style = template["label"]["style"] if template else _TERMINAL_LABEL_STYLE
     want_flags = 1 if kind == "$TERBUS" else 0
-    wire_tpl = next((w for w in sheet.wires() if w["flags"] == want_flags), None)
-    if wire_tpl is None:
-        raise dsn.DsnError("no existing wire of that kind (bus/normal) to copy the style from")
     key = sheet.new_key()
     label = {"text": net if kind in ("$TERDEFAULT", "$TERBUS") else "", "xy": [origin[0] + label_off[0], origin[1] + label_off[1]],
-             "transform": bytes.fromhex(label_tf), "style": template["label"]["style"]}
+             "transform": bytes.fromhex(label_tf), "style": label_style}
     term = {"type": "terminal", "origin": origin, "transform": bytes.fromhex(transform), "device": kind,
             "attributes": bytes.fromhex(_ATTRIBUTES[kind]), "label": label, "pointers": [key]}
     sheet.objects.append(term)
-    sheet.objects.append({"type": "wire", "start": key, "flags": want_flags, "style": wire_tpl["style"],
+    sheet.objects.append({"type": "wire", "start": key, "flags": want_flags, "style": _wire_style(sheet, want_flags),
                           "labels": [], "points": [p["xy"], t]})
     comp["pointers"][p["slot"]] = key
     sheet.reschedule()
@@ -504,6 +503,24 @@ def _merge_at(sheet: dsn.Sheet, j: dict) -> None:
     sheet.objects = [o for o in sheet.objects if o is not b and o is not j]
 
 
+def _tidy_junctions(sheet: dsn.Sheet, touched: list[dict]) -> int:
+    """After wires were taken off junctions: merge those left with two wires, drop those left with none, and
+    keep used slots first (as Proteus writes them).  Returns the number merged."""
+    merged = 0
+    for j in touched:
+        if not any(o is j for o in sheet.objects):
+            continue
+        keys = [k for k in j["pointers"] if k]
+        if len(keys) == 2:
+            _merge_at(sheet, j)
+            merged += 1
+        elif not keys:
+            sheet.objects = [o for o in sheet.objects if o is not j]
+        else:
+            j["pointers"] = keys + [0] * (len(j["pointers"]) - len(keys))
+    return merged
+
+
 def delete_wire(project: str | Path, pin: str | None = None, at_grid: list[float] | None = None) -> dict:
     """Delete one wire: the one on pin "REF.PIN", or the one passing through grid point `at_grid`.  A terminal
     left with no wire goes too; a junction left with two wires is merged into one wire."""
@@ -537,17 +554,99 @@ def delete_wire(project: str | Path, pin: str | None = None, at_grid: list[float
             touched.append(o)
     ids = {id(o) for o in doomed}
     sheet.objects = [o for o in sheet.objects if id(o) not in ids]
-    for j in touched:
-        n = sum(1 for k in j["pointers"] if k)
-        if n == 2:
-            _merge_at(sheet, j)
-            merged += 1
-        elif n == 0:
-            sheet.objects = [o for o in sheet.objects if o is not j]
+    merged = _tidy_junctions(sheet, touched)
     sheet.reschedule()
     save(project, sheet)
     return {"deleted_wire_points_grid": [[q[0] / GRID, q[1] / GRID] for q in wire["points"]],
             "terminals_removed": removed_terms, "junctions_merged": merged}
+
+
+def _label_spot(sheet: dsn.Sheet, segs: list, name: str):
+    """(wire, a, b, point) for a new wire label: a grid point on an unlabelled segment where the text (running
+    right of a horizontal wire, up a vertical one, about 0.7 grid per character) covers no part body or pin,
+    preferring long segments and their middles."""
+    ob = route.Obstacles(sheet, pad=0)
+    n = max(1, -(-len(name) * 7 // 10))
+    best = None
+    for w, a, b in segs:
+        if w["labels"]:
+            continue
+        horiz = a[1] == b[1]
+        length = abs(a[0] - b[0]) + abs(a[1] - b[1])
+        ends = {tuple(w["points"][0]), tuple(w["points"][-1])}
+        lo, hi = (sorted((a[0], b[0])) if horiz else sorted((a[1], b[1])))
+        for v in range(-(-lo // GRID) * GRID, hi + 1, GRID):
+            pt = [v, a[1]] if horiz else [a[0], v]
+            if tuple(pt) in ends and length > GRID:
+                continue
+            gx, gy = pt[0] // GRID, pt[1] // GRID
+            if pt[0] % GRID or pt[1] % GRID:
+                continue
+            box = ({(gx + i, gy + j) for i in range(n + 1) for j in (0, 1)} if horiz
+                   else {(gx + j, gy + i) for i in range(n + 1) for j in (-1, 0)})
+            hit = len(box & ob.nodes)
+            key = (hit, -length, abs(2 * v - lo - hi))
+            if best is None or key < best[0]:
+                best = (key, w, a, b, pt)
+    if best is None:
+        w, a, b = max(segs, key=lambda s: abs(s[1][0] - s[2][0]) + abs(s[1][1] - s[2][1]))
+        if w["labels"]:
+            raise dsn.DsnError(f"that wire already carries the label {w['labels'][0]['text']!r}; use "
+                               "schematic_rename_label to change it")
+        return w, a, b, [(a[0] + b[0]) // 2, (a[1] + b[1]) // 2]
+    return best[1:]
+
+
+def add_wire_label(project: str | Path, target: str, name: str, at_grid: list[float] | None = None) -> dict:
+    """Name a net by putting a wire label on one of its wires: `target` is a wired pin ("U3.A0", its own wire
+    is labelled) or an existing terminal / label name.  Wires labelled with the same name are one net in
+    Proteus, as with terminals.  The label goes at the middle of the longest straight segment, or at the
+    segment through `at_grid`.  A bus wire takes a bus name such as AD[0..7]."""
+    sheet = load(project)
+    if not name or len(name.encode("latin-1", "replace")) > 255:
+        raise dsn.DsnError("give a label name of 1..255 characters")
+    wires = None
+    if "." in target and at_grid is None:
+        ref, pin_name = target.split(".", 1)
+        try:
+            comp, p = find_pin(sheet, ref, pin_name)
+        except dsn.DsnError:
+            comp = None
+        if comp is not None:
+            key = comp["pointers"][p["slot"]]
+            if not key:
+                raise dsn.DsnError(f"{target} has no wire; use schematic_add_terminal to name a free pin")
+            wires = [w for w in sheet.wires() if w["start"] == key]
+    if wires is None:
+        wires = _target_wires(sheet, target)
+    segs = [(w, a, b) for w in wires for a, b in zip(w["points"], w["points"][1:]) if a != b]
+    if at_grid is not None:
+        t = (round(at_grid[0] * GRID), round(at_grid[1] * GRID))
+        segs = [(w, a, b) for w, a, b in segs if _on_segment(t, a, b)]
+        if not segs:
+            raise dsn.DsnError(f"no wire of {target} passes through {at_grid}")
+        w, a, b = segs[0]
+        mid = list(t)
+    else:
+        w, a, b, mid = _label_spot(sheet, segs, name)
+    if w["labels"]:
+        raise dsn.DsnError(f"that wire already carries the label {w['labels'][0]['text']!r}; use "
+                           "schematic_rename_label to change it")
+    if w["flags"] == 1 and not re.fullmatch(r".+\[\d+\.\.\d+\]", name):
+        raise dsn.DsnError("that is a bus wire; give a bus name such as AD[0..7]")
+    if w["flags"] == 0 and re.fullmatch(r".+\[\d+\.\.\d+\]", name):
+        raise dsn.DsnError("a bus name goes on a bus wire; name a single signal such as AD3 here")
+    # as Proteus places them (1650 of 1687 sample labels): just above a horizontal wire, left of a vertical one
+    if a[1] == b[1]:
+        xy, tf = [mid[0], mid[1] + 20320], "000000000000"
+    else:
+        xy, tf = [mid[0] - 20320, mid[1]], "840300000000"
+    w["labels"].append({"text": name, "xy": xy, "transform": bytes.fromhex(tf), "style": _WIRE_LABEL_STYLE})
+    save(project, sheet)
+    same = sum(1 for x in sheet.wires() for lab in x["labels"] if lab["text"] == name)
+    same += sum(1 for o in sheet.objects if o["type"] == "terminal" and o["label"]["text"] == name)
+    return {"label": name, "on": target, "at_grid": [mid[0] / GRID, mid[1] / GRID],
+            "places_with_this_name": same}
 
 
 def _num(x: float) -> str:
@@ -561,6 +660,12 @@ def _next_identity(sheet: dsn.Sheet) -> int:
     used = [o["identity"] for o in sheet.components()]
     used += [o["u16"] for o in sheet.objects if o["type"] == "instrument"]
     return max(used + [0]) + 1
+
+
+def _wire_style(sheet: dsn.Sheet, flags: int) -> bytes:
+    """Style record of an existing wire of that kind (0 = wire, 1 = bus wire), else the built-in default."""
+    w = next((w for w in sheet.wires() if w["flags"] == flags), None)
+    return w["style"] if w else _WIRE_STYLE[flags]
 
 
 _GEN_STYLE = (b"0\xe0\x03\x00\xc0\x19\x03\x00\x00\x00\xc0\x00\x01 \xff\x01Default Font\x00GENERATOR LABEL\x00\x00\x00\x00\x00",
@@ -598,9 +703,6 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
     mirror = 0 if out == (-1, 0) else 1                # mirror 0: body on the left, output to the right
     origin = [p["xy"][0] + distance_grid * GRID * out[0], p["xy"][1]]
     _check_clear(sheet, [p["xy"], origin], [p["xy"]])
-    wire_tpl = next((w for w in sheet.wires() if w["flags"] == 0), None)
-    if wire_tpl is None:
-        raise dsn.DsnError("no existing wire to copy the style from")
     side = 1 if mirror else -1
     label_tf = "000000000" if mirror else "000001000"
     props = (f"{{INIT=LOW}}\n{{START=0}}\n{{COUNT=-1}}\n{{CLOCK={_num(frequency_hz)}}}\n"
@@ -620,7 +722,7 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
            "props_n": len(props), "props": props, "props_inline": False, "flags": 0, "pointers": [key],
            "tail": b"\0\0\0\0", "tail_c": 0, "blob_n": 5, "blob": b"\0"}
     sheet.objects.append(gen)
-    sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": wire_tpl["style"],
+    sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": _wire_style(sheet, 0),
                           "labels": [], "points": [p["xy"], origin]})
     comp["pointers"][p["slot"]] = key
     sheet.reschedule()
@@ -630,6 +732,35 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
 
 
 _ROTATIONS = {0: 0, 90: 900, 180: 1800, 270: 2700}
+
+
+def _placement_check(sheet: dsn.Sheet, comp: dict, ignore: tuple = ()) -> None:
+    """Refuse a placement whose visible pins (ends or body anchors) land on an existing connection point,
+    on a wire, or inside another part's body.  `comp` must not be in sheet.objects; nor should objects in
+    `ignore` (e.g. the part's own wires while it is being moved) matter."""
+    skip = {id(o) for o in ignore}
+    saved = sheet.objects
+    sheet.objects = [o for o in saved if id(o) not in skip and o is not comp]
+    try:
+        spots = _hot_spots(sheet)
+        ob = route.Obstacles(sheet, pad=0)
+        wires = sheet.wires()
+        sheet.objects = sheet.objects + [comp]
+        for p in pins(sheet, comp):
+            if p["hidden"]:
+                continue
+            xy = tuple(p["xy"])
+            where = [xy[0] / GRID, xy[1] / GRID]
+            if xy in spots:
+                raise dsn.DsnError(f"pin {p['name']} would land on an existing connection point at {where}")
+            if any(_on_segment(xy, a, b) for w in wires for a, b in zip(w["points"], w["points"][1:])):
+                raise dsn.DsnError(f"pin {p['name']} would land on an existing wire at {where}; pick another spot")
+            L = GLYPH_LENGTH.get(p["glyph"], 2 * GRID)
+            for q in (xy, (xy[0] - p["out"][0] * L, xy[1] - p["out"][1] * L)):
+                if q[0] % GRID == 0 and q[1] % GRID == 0 and (q[0] // GRID, q[1] // GRID) in ob.nodes:
+                    raise dsn.DsnError(f"pin {p['name']} at {where} would overlap another part; pick another spot")
+    finally:
+        sheet.objects = saved
 
 
 def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotation: int | None = None,
@@ -679,12 +810,8 @@ def add_part(project: str | Path, like: str, x_grid: float, y_grid: float, rotat
     new["pointers"] = [0] * len(new["pointers"])
     new["start"] = None
     # the new part's pins must not land on anything existing
-    spots = _hot_spots(sheet)
+    _placement_check(sheet, new)
     sheet.objects.append(new)
-    clash = [p for p in pins(sheet, new) if tuple(p["xy"]) in spots and not p["hidden"]]
-    if clash:
-        raise dsn.DsnError(f"pin {clash[0]['name']} would land on an existing connection point at "
-                           f"{[clash[0]['xy'][0] / GRID, clash[0]['xy'][1] / GRID]}")
     sheet.reschedule()
     save(project, sheet)
     return {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID],
@@ -698,9 +825,13 @@ def check(project: str | Path) -> dict:
     members are labelled elsewhere are not reported).  Unused pins are normal (spare decoder outputs, unused
     8259 inputs); look for the ones the design needs."""
     sheet = load(project)
-    open_pins = {}
+    open_pins, unreadable = {}, []
     for comp in sheet.components():
-        missing = [p["name"] for p in pins(sheet, comp) if not p["hidden"] and not p["connected"]]
+        try:
+            missing = [p["name"] for p in pins(sheet, comp) if not p["hidden"] and not p["connected"]]
+        except dsn.DsnError:
+            unreadable.append(sheet.name_of(comp))
+            continue
         if missing:
             open_pins[sheet.name_of(comp)] = missing
     names = labels(project)
@@ -716,7 +847,10 @@ def check(project: str | Path) -> dict:
                for b in names if b.endswith("]")):
             continue                     # AD5 alone still joins the AD[0..15] bus
         singles.append({"name": name, "pins": info["pins"]})
-    return {"unconnected_pins": open_pins, "single_use_names": singles}
+    out = {"unconnected_pins": open_pins, "single_use_names": singles}
+    if unreadable:
+        out["pin_table_unreadable"] = unreadable
+    return out
 
 
 def labels(project: str | Path) -> dict:
@@ -726,7 +860,11 @@ def labels(project: str | Path) -> dict:
     sheet = load(project)
     owner: dict[int, list[str]] = {}
     for comp in sheet.components():
-        for pin, ptr in zip(pins(sheet, comp), comp["pointers"]):
+        try:
+            comp_pins = pins(sheet, comp)
+        except dsn.DsnError:
+            continue
+        for pin, ptr in zip(comp_pins, comp["pointers"]):
             if ptr:
                 owner.setdefault(ptr, []).append(f"{sheet.name_of(comp)}.{pin['name']}")
     out: dict[str, dict] = {}
@@ -787,22 +925,11 @@ def move_part(project: str | Path, ref: str, x_grid: float, y_grid: float) -> di
     dx, dy = origin[0] - comp["origin"][0], origin[1] - comp["origin"][1]
     before = {p["slot"]: p for p in pins(sheet, comp)}
     own_wires = {k for k in comp["pointers"] if k}
-    spots = _hot_spots(sheet) - {tuple(p["xy"]) for p in before.values()}
-    spots -= {tuple(pt) for w in sheet.wires() if w["start"] in own_wires for pt in (w["points"][0], w["points"][-1])}
     comp["origin"] = origin
     for t in comp["labels"]:
         t["xy"] = [t["xy"][0] + dx, t["xy"][1] + dy]
     after = {p["slot"]: p for p in pins(sheet, comp)}
-    clash = [p for p in after.values() if tuple(p["xy"]) in spots and not p["hidden"]]
-    if clash:
-        raise dsn.DsnError(f"pin {clash[0]['name']} would land on an existing connection point")
-    for p in after.values():
-        for w in sheet.wires():
-            if w["start"] in own_wires or p["hidden"]:
-                continue
-            if any(_on_segment(tuple(p["xy"]), a, b) for a, b in zip(w["points"], w["points"][1:])):
-                raise dsn.DsnError(f"pin {p['name']} would land on an existing wire at "
-                                   f"{[p['xy'][0] / GRID, p['xy'][1] / GRID]}; pick another spot")
+    _placement_check(sheet, comp, ignore=tuple(w for w in sheet.wires() if w["start"] in own_wires))
     # wired pins: drag each wire's end along (rubber band), keeping the wire orthogonal
     wires = {w["start"]: w for w in sheet.wires()}
     stretched = []
@@ -859,7 +986,7 @@ def delete_part(project: str | Path, ref: str) -> dict:
         if _in_cdb(project, target):
             raise dsn.DsnError(f"{ref} has a ROOT.CDB record; delete it in Proteus instead")
     wires = {o["start"]: o for o in sheet.objects if o["type"] == "wire"}
-    doomed, gone = [target], []
+    doomed, gone, touched = [target], [], []
     for key in [k for k in target["pointers"] if k]:
         doomed.append(wires[key])
         for o in sheet.objects:
@@ -870,8 +997,11 @@ def delete_part(project: str | Path, ref: str) -> dict:
                 gone.append(o["label"]["text"] if o["type"] == "terminal" else o["labels"][0]["text"])
             else:
                 o["pointers"] = [0 if k == key else k for k in o["pointers"]]
+                if o["type"] == "junction":
+                    touched.append(o)
     ids = {id(o) for o in doomed}
     sheet.objects = [o for o in sheet.objects if id(o) not in ids]
+    _tidy_junctions(sheet, touched)
     sheet.reschedule()
     save(project, sheet)
     return {"deleted": ref, "wires": len(doomed) - 1 - len(gone), "terminals_removed": gone}

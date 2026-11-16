@@ -1,4 +1,5 @@
-﻿"""Tap a wire with a junction, move a wired part and delete a wire through the MCP server, then confirm the
+﻿"""Tap a wire with a junction, move a wired part, delete a wire and label two nets alike through the MCP
+server, then confirm the
 result in Proteus's own netlist (and that Proteus opens the file without a dialog).
 
     python -X utf8 scripts/smoke_junction.py labs/2025/lab5/taslak.pdsprj [screenshot.png]
@@ -40,6 +41,9 @@ async def main():
             await call("schematic_connect", {"project": P, "a": "RES#0010.1", "b": "U3.PB0"})
             comp = (await s.call_tool("schematic_components", {"project": P, "ref": "RES#0010"})).structured_content["result"][0]
             await call("schematic_move", {"project": P, "ref": "RES#0010", "x_grid": comp["grid"][0] + 2, "y_grid": comp["grid"][1] + 3})
+            # same label on two separate nets: Proteus must report them as one net
+            await call("schematic_add_wire_label", {"project": P, "target": "U2.Q1", "name": "SMOKE"})
+            await call("schematic_add_wire_label", {"project": P, "target": "U3.PB0", "name": "SMOKE"})
             await call("schematic_check", {"project": P})
             await call("proteus_launch", {"project": P})
             try:

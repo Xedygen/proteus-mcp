@@ -196,6 +196,12 @@ the passing result in `docs/evidence/`.
 - [x] Junction taps (`schematic_tap`, connect falls back to it), deleting single wires
       (`schematic_delete_wire`), moving wired parts, maze router for all new wires (2026-11-16, checked in
       Proteus with `scripts/smoke_junction.py`).
+- [x] Wire labels (`schematic_add_wire_label`, checked in Proteus: two nets labelled alike become one) and
+      built-in wire / bus wire / terminal label styles, so edits no longer need an existing object to copy
+      from (2026-11-16; the styles are byte-identical in all 28 sample files).
+- [x] Review items: unknown pin glyphs refused, parts with unreadable pin tables blocked as boxes, junctions
+      tidied when a part is deleted, add_part/move refuse pins on wires or bodies, drop-offset correction no
+      longer overshoots.
 - [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
 - [ ] 2024 labs as extra cases; one circuit drawn from scratch.
 - [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
@@ -231,6 +237,7 @@ place-devices verification, generator identity clash.
 - [x] sim() waits for the requested state. (sim_log still pauses/resumes when the log popup is closed.)
 - [x] Turning background mode off brings hidden popups back on screen.
 - [x] add_part prefix for multi-gate parts. (Rotation still leaves labels unrotated.)
-- [ ] _check_clear misses a corner landing mid-wire; parts with unparsable pin tables are unprotected.
+- [x] _check_clear misses a corner landing mid-wire; parts with unparsable pin tables are unprotected.
+      (New wires come from the maze router, which forbids corners on wires and boxes unreadable parts.)
 - [x] dialog_answer, schematic_labels added; ROM images travel with the project.
 - [x] Docs: FORMAT.md stale "6 of 27 parse" section and NUL bytes near line 121.

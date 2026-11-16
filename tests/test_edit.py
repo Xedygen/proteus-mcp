@@ -130,6 +130,35 @@ def test_move_keeps_wire_direction(proj):
     assert route.path_clear(route.Obstacles(sheet, {tuple(w["points"][0]), tuple(w["points"][-1])}), w["points"])
 
 
+def test_delete_part_tidies_junctions(proj):
+    """Deleting a part whose wire ends on a junction merges the junction away when two wires remain."""
+    schematic.connect(proj, "U2.Q2", "U3.PA0")
+    r = schematic.tap(proj, "RES#0010.1", "U3.PA0")
+    n_j = sum(1 for o in schematic.load(proj).objects if o["type"] == "junction")
+    schematic.delete_part(proj, "RES#0010")
+    sheet = consistent(proj)
+    assert sum(1 for o in sheet.objects if o["type"] == "junction") == n_j - 1
+    for o in sheet.objects:
+        if o["type"] == "junction":
+            ks = o["pointers"]
+            assert ks == [k for k in ks if k] + [0] * ks.count(0)
+
+
+def test_wire_label(proj):
+    schematic.connect(proj, "U2.Q2", "U3.PA0")
+    r = schematic.add_wire_label(proj, "U3.PA0", "SIG7")
+    sheet = consistent(proj)
+    w = next(w for w in sheet.wires() if w["labels"] and w["labels"][0]["text"] == "SIG7")
+    lab = w["labels"][0]
+    assert lab["style"] == schematic._WIRE_LABEL_STYLE
+    x, y = round(r["at_grid"][0] * schematic.GRID), round(r["at_grid"][1] * schematic.GRID)
+    assert any(schematic._on_segment((x, y), a, b) for a, b in zip(w["points"], w["points"][1:]))
+    with pytest.raises(dsn.DsnError):
+        schematic.add_wire_label(proj, "U3.PA0", "OTHER")      # one label per wire
+    with pytest.raises(dsn.DsnError):
+        schematic.add_wire_label(proj, "U2.Q2", "AD[0..7]")   # bus name on a plain wire
+
+
 def test_delete_wire_by_point(proj):
     sheet = schematic.load(proj)
     holders = schematic._holders(sheet)

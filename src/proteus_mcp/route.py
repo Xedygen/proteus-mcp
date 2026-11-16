@@ -13,7 +13,7 @@ import heapq
 import math
 
 from . import dsn
-from .devices import pins
+from .devices import GLYPH_LENGTH, pins
 
 GRID = dsn.GRID
 DIRS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -30,7 +30,7 @@ def _is_int(v: float) -> bool:
 
 
 class Obstacles:
-    def __init__(self, sheet: dsn.Sheet, allow: set[tuple[int, int]] = frozenset()):
+    def __init__(self, sheet: dsn.Sheet, allow: set[tuple[int, int]] = frozenset(), pad: int = 1):
         self.nodes: set[tuple[int, int]] = set()       # grid nodes a route may not touch
         self.edges: set[tuple[tuple[int, int], tuple[int, int]]] = set()   # unit edges taken by wires/pins
         self.on_wire: set[tuple[int, int]] = set()     # nodes inside existing wires: may cross, not turn
@@ -76,7 +76,7 @@ class Obstacles:
                 continue
             anchors = []
             for p in vis:
-                L = GRID if p["glyph"] == "$PINSHORT" else 2 * GRID
+                L = GLYPH_LENGTH.get(p["glyph"], 2 * GRID)
                 a = [p["xy"][0] - p["out"][0] * L, p["xy"][1] - p["out"][1] * L]
                 anchors.append(a)
                 block(p["xy"])
@@ -95,7 +95,7 @@ class Obstacles:
                 x0, x1 = min(x0, x0 - 2 * o[0]), max(x1, x1 - 2 * o[0])
                 y0, y1 = min(y0, y0 - 2 * o[1]), max(y1, y1 - 2 * o[1])
             # the drawn body reaches about a grid past its outermost pins (chip outlines, resistor ends)
-            x0, x1, y0, y1 = x0 - 1, x1 + 1, y0 - 1, y1 + 1
+            x0, x1, y0, y1 = x0 - pad, x1 + pad, y0 - pad, y1 + pad
             for x in range(math.ceil(x0), math.floor(x1) + 1):
                 for y in range(math.ceil(y0), math.floor(y1) + 1):
                     self.nodes.add((x, y))

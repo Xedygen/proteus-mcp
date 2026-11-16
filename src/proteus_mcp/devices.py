@@ -81,6 +81,10 @@ def pins(sheet: Sheet, component: dict) -> list[dict]:
     angle, mirror = struct.unpack("<hH", component["transform"])
     out = []
     for slot, (pin, ptr) in enumerate(zip(table, component["pointers"])):
+        hidden = not (int(pin["flags"][2:4], 16) & 2)
+        if pin["glyph"] not in GLYPH_LENGTH and not hidden:
+            # a wrong length would put the wire end beside the pin, unconnected; better to say so
+            raise DsnError(f"{component['device']}: pin {pin['name']} has an unknown pin glyph {pin['glyph']}")
         length = GLYPH_LENGTH.get(pin["glyph"], 0)
         off = transform([-length, 0], pin["angle"], pin["mirror"])
         local = [pin["anchor"][0] + off[0], pin["anchor"][1] + off[1]]
@@ -91,7 +95,7 @@ def pins(sheet: Sheet, component: dict) -> list[dict]:
                     "xy": [component["origin"][0] + v[0], component["origin"][1] + v[1]],
                     "out": d, "connected": bool(ptr), "bus": pin["glyph"] == "$PINBUS",
                     # hidden power pins (VCC/GND of logic parts): flag byte 1 has no 0x02 bit
-                    "hidden": not (int(pin["flags"][2:4], 16) & 2)})
+                    "hidden": hidden})
     return out
 
 

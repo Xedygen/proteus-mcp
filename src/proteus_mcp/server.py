@@ -394,8 +394,8 @@ def schematic_place_devices(project: str, devices: list[dict]) -> list[dict]:
             matched.append(hit)
         found = [(m, x, y) for m, (_, x, y) in zip(matched, want) if m is not None]
         if found:                       # learn where Proteus actually drops relative to the click
-            shift[0] -= sum(m["grid"][0] - (x + shift[0]) for m, x, y in found) / len(found)
-            shift[1] -= sum(m["grid"][1] - (y + shift[1]) for m, x, y in found) / len(found)
+            shift[0] -= sum(m["grid"][0] - x for m, x, y in found) / len(found)
+            shift[1] -= sum(m["grid"][1] - y for m, x, y in found) / len(found)
         wired = [m["ref"] for m in matched if m is not None and any(q["connected"] for q in m["pins"])]
         if None in matched:
             problem = "a drop click missed"
@@ -456,6 +456,15 @@ def schematic_delete_wire(project: str, pin: str | None = None, at_grid: list[fl
     A terminal at its end goes too; a junction left with two wires is merged back into one wire. Use it to
     undo a wrong connection or free a pin."""
     return schematic.delete_wire(_closed(project), pin, at_grid)
+
+
+@mcp.tool()
+def schematic_add_wire_label(project: str, target: str, name: str, at_grid: list[float] | None = None) -> dict:
+    """Put a wire label on a net: `target` is a wired pin ("U3.A0") or an existing terminal / label name.
+    Wires and terminals with the same name are one net, so this joins distant nets without drawing a wire
+    (e.g. label two wires "CLK"). On a bus wire use a bus name such as AD[0..7]; a single member (AD3) of
+    that bus is reached by a plain wire labelled AD3. `at_grid` [x, y] picks the segment."""
+    return schematic.add_wire_label(_closed(project), target, name, at_grid)
 
 
 @mcp.tool()
