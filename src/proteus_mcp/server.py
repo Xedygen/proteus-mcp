@@ -371,8 +371,11 @@ def firmware_build(project: str, source: str | None = None) -> dict:
     res = firmware.build(text)
     out = res.as_dict()
     if res.ok:
-        pdsprj.replace(p, {fp[0]: firmware.normalise_source(text), fp[1]: res.exe})
+        reg = pdsprj.register_firmware(files)          # a stub firmware project that lists no files
+        pdsprj.replace(p, {fp[0]: firmware.normalise_source(text), fp[1]: res.exe, **reg})
         out["stored"] = {"source": fp[0], "exe": fp[1], "load_bytes": _exe_load_size(res.exe)}
+        if reg:
+            out["stored"]["registered"] = list(reg)
     return out
 
 

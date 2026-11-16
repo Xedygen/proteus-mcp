@@ -13,7 +13,7 @@ A `.pdsprj` is a ZIP archive:
 | `ROOT.DSN` | Schematic (binary) |
 | `ROOT.CDB` | Parts and net database (binary, properties in plain text) |
 | `FIRMWARE.XML` | Lists firmware projects; `COMPILER="MASM32"` |
-| `FIRMWARE/<name>.XML` | VSM Studio project; `<name>` is `8086` or `8086_` |
+| `FIRMWARE/<name>.XML` | VSM Studio project; `<name>` is `8086` or `8086_`. Its `<FILES>` must list `main.asm` and `Debug/Debug.exe` (`FIRMWARE="1"`) or Proteus ignores the stored EXE (2024 lab 5 template: `<FILES ATTACH="1"/>`) |
 | `FIRMWARE/<name>/main.asm` | Source |
 | `FIRMWARE/<name>/Debug/Debug.exe` | Built DOS EXE |
 | `SCRIPTS/PWRRAILS.DAT`, `SCRIPTS/REQUIRES.DAT` | Power rail config, product requirements |

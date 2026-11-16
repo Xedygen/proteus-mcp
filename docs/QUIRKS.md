@@ -44,7 +44,11 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   device four times to get U4:A..U4:D in one package, or copy a gate with schematic_add_part (new package).
   The generic single-gate OR / AND / NOT devices avoid that.
 - **Memory Contents** popups (62256, 27C128) show 2CH bytes per row: count offsets from the row label.
-- **Templates without a firmware project** (2024 `proteus_sablon.pdsprj`): the 8086 still points at a stale
+- **Firmware project that lists no files** (2024 lab 5 `proteus_sablon.pdsprj`: `FIRMWARE/8086.XML` has an
+  empty `<FILES ATTACH="1"/>`): Proteus ignores a stored Debug.exe and uses the 8086's stale PROGRAM path
+  ("Can't load ..."). firmware_build fills in the file list the way the lab's solution has it; Proteus then
+  builds its own copy and logs "Program Loaded" (checked 2026-11-17).
+- **Templates without a firmware project** (other 2024 `proteus_sablon.pdsprj`): the 8086 still points at a stale
   temp path. Proteus links programs through ROOT.CDB, which only its own dialogs may change; a changed
   property is saved into ROOT.DSN but not ROOT.CDB, so it lasts one Proteus session. firmware_build keeps the
   EXE beside the project (<name>_8086.exe) and proteus_launch sets the 8086's Program File to it through the

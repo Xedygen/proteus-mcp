@@ -228,6 +228,10 @@ the passing result in `docs/evidence/`.
             copies no longer take the package name (U4 vs U4:A), schematic_add_terminals (batch).
       - [x] Minimal prompt ("do the lab in this PDF" + save path), lab7 (2026-11-16): picked Application 2
             (LDR -> ADC -> DAC -> motors), motor voltage follows the torch 0 -> 11.9 V; 50 turns, 0 tool errors.
+      - [~] 2024 lab 5 (minimal prompt, 2026-11-17): 96 turns, about 5.6 USD, 12 min, 0 tool errors; wired the
+            whole circuit (Proteus netlist confirmed) but could not simulate: the template's 8086.XML lists no
+            files, so Proteus ignored the built EXE. Fixed: firmware_build registers main.asm/Debug.exe there
+            (checked live: "Program Loaded"). Rerun pending.
       - [x] 2024 lab 8 (minimal prompt; template without a firmware project): DAC square 19.997 Hz and sawtooth
             39.86 Hz measured in simulation. Fixed from it: lab_list finds proteus_sablon templates, programs
             for such templates are attached at launch, crash-report prompt declined, top-level log popup.
