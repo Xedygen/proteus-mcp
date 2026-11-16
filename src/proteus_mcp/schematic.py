@@ -268,6 +268,62 @@ _WIRE_LABEL_STYLE = b"0\xe0\x03\x00\xc0\x19\x03\x00\x00\x00\x00\x00\x01 \xff\x01
 _ATTRIBUTES = {"$TERDEFAULT": "090000000000","$TERBUS": "090000000000", "$TERGROUND": "0d0000000000", "$TERPOWER": "0d0000000000"}
 
 
+# Terminal label text: the TERMINAL LABEL style holds 0.8 grid for the character height; capitals measure
+# about 0.58 grid wide in a 300 DPI export (2026-11-16), rounded up.  Used only to keep a new terminal's
+# label off its neighbours'.
+_LABEL_H, _LABEL_W = round(0.8 * GRID), round(0.62 * GRID)
+_FACING = {(dev, tf): face for (dev, face), (tf, *_rest) in _TERMINALS.items()}
+
+
+# label transform of a top/bottom terminal: text right-aligned on the label point (left of the circle, the
+# default) or left-aligned on it (right of the circle); both drawn horizontally (seen in Proteus 2026-11-16)
+_LABEL_LEFT_OF, _LABEL_RIGHT_OF = "000001000800", "000000000800"
+
+
+def _terminal_boxes(device: str, facing: str | None, origin, text: str,
+                    label: tuple | None = None) -> list[tuple[int, int, int, int]]:
+    """Rough boxes (x0, y0, x1, y1) covering a terminal's symbol and its label.  `label` is the label's
+    (xy, transform bytes) when known; otherwise the defaults add_terminal writes."""
+    transform, conn, label_off, label_tf = _TERMINALS[(device, facing)]
+    t = (origin[0] + conn[0], origin[1] + conn[1])
+    lx, ly = label[0] if label else (origin[0] + label_off[0], origin[1] + label_off[1])
+    n, half = len(text) * _LABEL_W, _LABEL_H // 2 + GRID // 10
+    if facing in ("left", "right"):
+        s = -1 if facing == "left" else 1                # the label runs away from the pin
+        xs = (t[0], lx + s * n)
+        return [(min(xs), ly - half, max(xs), ly + half)]
+    if facing in ("up", "down"):
+        # the text stays horizontal and is drawn just above the label point for a terminal facing down, just
+        # below it for one facing up (both seen in Proteus 2026-11-16, i.e. between the circle and the point)
+        ring = round(0.2 * GRID)
+        ys = (t[1], origin[1] - ring if facing == "down" else origin[1] + ring)
+        col = (origin[0] - ring, min(ys), origin[0] + ring, max(ys))
+        right_aligned = (label[1].hex() if label else label_tf) != _LABEL_RIGHT_OF
+        x0, x1 = (lx - n, lx) if right_aligned else (lx, lx + n)
+        if facing == "down":
+            return [col, (x0, ly + GRID // 10, x1, ly + round(1.1 * GRID))]
+        return [col, (x0, ly - round(1.1 * GRID), x1, ly - GRID // 10)]
+    body = (origin[0] - GRID, min(origin[1], t[1]), origin[0] + GRID, max(origin[1], t[1]))
+    return [body] + ([(lx, ly - half, lx + n, ly + half)] if text else [])
+
+
+def _label_boxes(sheet: dsn.Sheet) -> list[tuple[int, int, int, int]]:
+    out = []
+    for o in sheet.objects:
+        if o["type"] != "terminal":
+            continue
+        face = _FACING.get((o["device"], o["transform"].hex()), "?")
+        if face == "?":
+            continue                                     # a form not measured: no box
+        out += _terminal_boxes(o["device"], face, o["origin"], o["label"]["text"],
+                               (o["label"]["xy"], o["label"]["transform"]))
+    return out
+
+
+def _boxes_meet(a, b) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
 def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2) -> dict:
     """Attach a terminal to an unconnected pin ("REF.PIN"): `net` = "GND", "VCC"/"POWER", or any net name
     (pins with terminals of the same name are connected, like wire labels).  The terminal is placed two grid
@@ -302,22 +358,74 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     else:
         facing = None
     transform, conn, label_off, label_tf = _TERMINALS[(kind, facing)]
-    # a power/ground symbol's body sticks out sideways, so next to a neighbour's terminal step further out
-    for distance in (distance_grid, distance_grid + 2, distance_grid + 4):
+    # step further out when the symbol or its label would land on a neighbour's (pins half a grid apart,
+    # power symbols that stick out sideways); a label overlap alone is cosmetic, so the nearest clear spot
+    # is used, with a note, when no spot avoids it
+    text = net if kind in ("$TERDEFAULT", "$TERBUS") or rail else ""
+    taken = _label_boxes(sheet)
+    segments = [(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+                for w in sheet.wires() for a, b in zip(w["points"], w["points"][1:])]
+    # keep labels out of the strip in front of free pins, where their own lead and terminal go.  Pins facing
+    # the same way as this one (a row of them): the whole stepping range, since a label across such a pin's
+    # path makes its terminal cross it whatever it does.  Others: a short strip (their labels are checked
+    # against this one when they are added)
+    reach, ring, reserved, blocking = 3 * GRID, round(0.3 * GRID), [], []
+    for c in sheet.components():
+        try:
+            others = pins(sheet, c)
+        except dsn.DsnError:
+            continue
+        for q in others:
+            if q["hidden"] or q["connected"] or q["xy"] == p["xy"]:
+                continue
+            (x, y), (dx, dy) = q["xy"], q["out"]
+            row = tuple(q["out"]) == tuple(out)
+            r = (distance_grid + 20) * GRID if row else reach               # past any reachable label
+            ex, ey = x + dx * r, y + dy * r
+            (blocking if row else reserved).append(
+                (min(x, ex) - ring * (dx == 0), min(y, ey) - ring * (dy == 0),
+                 max(x, ex) + ring * (dx == 0), max(y, ey) + ring * (dy == 0)))
+    # a top/bottom terminal's label can sit left (default) or right of its circle
+    sides = [(label_off, label_tf)]
+    if facing in ("up", "down"):
+        sides.append((label_off, _LABEL_RIGHT_OF))
+    # score each clear spot by overlaps with labels/wires, then pin paths of this part blocked (that pin's lead
+    # would have to cross this label), then grid steps out plus one per other part's free-pin strip covered;
+    # ties go to the nearer spot and the default side
+    best, note, last = None, None, None
+    for distance in range(distance_grid, distance_grid + 17):
+        if best is not None and best[0][:2] == (0, 0) and best[0][2:4] <= (distance - distance_grid, 0):
+            break                                        # nothing further out can score better
         t = [p["xy"][0] + distance * GRID * out[0], p["xy"][1] + distance * GRID * out[1]]
         origin = [t[0] - conn[0], t[1] - conn[1]]
         try:
             _check_clear(sheet, [p["xy"], t, origin], [p["xy"]])
-            break
-        except dsn.DsnError:
-            if distance == distance_grid + 4:
-                raise
+        except dsn.DsnError as e:
+            last = e
+            continue
+        lead = (min(p["xy"][0], t[0]), min(p["xy"][1], t[1]), max(p["xy"][0], t[0]), max(p["xy"][1], t[1]))
+        lead_hits = sum(_boxes_meet(lead, b) for b in taken)
+        for side, (off, tf) in enumerate(sides):
+            lxy = [origin[0] + off[0], origin[1] + off[1]]
+            mine = _terminal_boxes(kind, facing, origin, text, (lxy, bytes.fromhex(tf)))
+            hard = lead_hits + sum(_boxes_meet(a, b) for a in mine for b in taken + segments)
+            blocks = sum(_boxes_meet(a, b) for a in mine for b in blocking)
+            soft = sum(_boxes_meet(a, b) for a in mine for b in reserved)
+            # the non-default side costs eight steps: a label there lies across where a part placed later
+            # beside this one (the next of a row) would run its lead, so a row keeps one staircase
+            score = (hard, blocks, soft + distance - distance_grid + 8 * side, side, distance)
+            if best is None or score < best[0]:
+                best = (score, t, origin, lxy, tf)
+    if best is None:
+        raise last
+    (hard, *_), t, origin, label_xy, label_tf = best
+    if hard:
+        note = "its label touches a neighbouring terminal's label or a wire; check with screenshot_part"
     template = next((o for o in sheet.objects if o["type"] == "terminal"), None)
     label_style = template["label"]["style"] if template else _TERMINAL_LABEL_STYLE
     want_flags = 1 if kind == "$TERBUS" else 0
     key = sheet.new_key()
-    label = {"text": net if kind in ("$TERDEFAULT", "$TERBUS") or rail else "", "xy": [origin[0] + label_off[0], origin[1] + label_off[1]],
-             "transform": bytes.fromhex(label_tf), "style": label_style}
+    label = {"text": text, "xy": label_xy, "transform": bytes.fromhex(label_tf), "style": label_style}
     term = {"type": "terminal", "origin": origin, "transform": bytes.fromhex(transform), "device": kind,
             "attributes": bytes.fromhex(_ATTRIBUTES[kind]), "label": label, "pointers": [key]}
     sheet.objects.append(term)
@@ -327,8 +435,11 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     sheet.reschedule()
     save(project, sheet)
     # echo what the pin resolved to: names win over numbers, so on a 74154 "5" is output Y5 (pin 6)
-    return {"pin": pin, "resolved": f"{p['name']} (pin {p['number'] or '?'})", "terminal": kind, "net": net,
-            "terminal_grid": [t[0] / GRID, t[1] / GRID]}
+    r = {"pin": pin, "resolved": f"{p['name']} (pin {p['number'] or '?'})", "terminal": kind, "net": net,
+         "terminal_grid": [t[0] / GRID, t[1] / GRID]}
+    if note:
+        r["note"] = note
+    return r
 
 
 # ----- nets made of wires and junctions -----------------------------------------------------------------

@@ -669,6 +669,54 @@ class Session:
             raise GuiError(f"{win32gui.GetWindowText(h)!r} did not copy anything (not a memory window?)")
         return text
 
+    # File > Export Graphics > Export Bitmap and the ids of its radio buttons
+    _EXPORT_BITMAP = 22
+    _BMP_DPI = {100: 1024, 200: 1025, 300: 1026, 400: 1027, 600: 1028}
+    _BMP_SHEET, _BMP_DISPLAY_COLOURS, _BMP_TO_FILE = 514, 1539, 3584
+
+    def export_sheet(self, dpi: int = 200, timeout: float = 30.0) -> Image.Image:
+        """The whole current sheet as an image at `dpi`, through Export Bitmap (to the clipboard, in display
+        colours).  Much sharper than a window screenshot.  The clipboard's previous text is put back."""
+        import win32clipboard as cb
+        from PIL import ImageGrab
+
+        if dpi not in self._BMP_DPI:
+            raise GuiError(f"dpi must be one of {sorted(self._BMP_DPI)}")
+        cb.OpenClipboard()
+        try:
+            old = cb.GetClipboardData(win32con.CF_UNICODETEXT) if \
+                cb.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT) else None
+            cb.EmptyClipboard()
+        finally:
+            cb.CloseClipboard()
+        try:
+            win32gui.PostMessage(self.main, win32con.WM_COMMAND, self._EXPORT_BITMAP, 0)
+            d = self._wait_dialog(lambda d: d["title"] == "Export Bitmap", 10)
+            ids = {win32gui.GetDlgCtrlID(c): c for c, _, _ in _children(d["hwnd"])}
+            for i in (self._BMP_SHEET, self._BMP_DPI[dpi], self._BMP_DISPLAY_COLOURS):
+                win32gui.SendMessage(ids[i], win32con.BM_CLICK, 0, 0)
+            if win32gui.SendMessage(ids[self._BMP_TO_FILE], win32con.BM_GETCHECK, 0, 0):
+                win32gui.SendMessage(ids[self._BMP_TO_FILE], win32con.BM_CLICK, 0, 0)
+            _click_button(d["hwnd"], "OK", post=True)
+            t0, img = time.monotonic(), None
+            while time.monotonic() - t0 < timeout and not isinstance(img, Image.Image):
+                time.sleep(0.3)
+                try:
+                    img = ImageGrab.grabclipboard()
+                except OSError:
+                    img = None              # clipboard busy while Proteus writes it
+        finally:
+            cb.OpenClipboard()
+            try:
+                cb.EmptyClipboard()
+                if old is not None:
+                    cb.SetClipboardData(win32con.CF_UNICODETEXT, old)
+            finally:
+                cb.CloseClipboard()
+        if not isinstance(img, Image.Image):
+            raise GuiError(f"Export Bitmap put no image on the clipboard; open dialogs: {self.dialogs()}")
+        return img.convert("RGB")
+
     # ----- screenshots and popups ----------------------------------------------------------
     def screenshot(self, title: str | None = None) -> Image.Image:
         if title is None:

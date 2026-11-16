@@ -86,10 +86,13 @@ class Obstacles:
             xs = [_g(a[0]) for a in anchors]
             ys = [_g(a[1]) for a in anchors]
             x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+            # a thin part (resistor, diode) is under a grid wide: routes keep a grid clear of it, but for the
+            # placement check (pad 0) parts may sit side by side a grid apart, as the lab templates' pull-ups do
+            w = 1 if pad else 0.5
             if x1 - x0 < 1:
-                x0, x1 = x0 - 1, x1 + 1
+                x0, x1 = x0 - w, x1 + w
             if y1 - y0 < 1:
-                y0, y1 = y0 - 1, y1 + 1
+                y0, y1 = y0 - w, y1 + w
             if len(vis) == 1:              # one-pin parts (LOGICSTATE, probes): body opposite the pin
                 o = vis[0]["out"]
                 x0, x1 = min(x0, x0 - 2 * o[0]), max(x1, x1 - 2 * o[0])

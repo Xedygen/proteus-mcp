@@ -178,6 +178,35 @@ def test_supply_names_become_power_terminals(proj):
     assert {"+12V", "VEE"} <= texts
 
 
+def test_crowded_terminals_step_out(proj):
+    """The lab5 display pins are half a grid apart: their terminals form a staircase whose labels and wires
+    stay apart (checked in Proteus 2026-11-16)."""
+    d = "7SEG-MPX1-CA#0005"
+    ys = []
+    for s in "ABCDEFGH":
+        r = schematic.add_terminal(proj, f"{d}.{s}", f"SEG{s}")
+        assert "note" not in r
+        ys.append(r["terminal_grid"][1])
+    assert ys == sorted(ys, reverse=True) and len(set(ys)) == 8
+    sheet = consistent(proj)
+    boxes = [b for o in sheet.objects if o["type"] == "terminal" and o["label"]["text"].startswith("SEG")
+             for b in schematic._terminal_boxes(o["device"], "down", o["origin"], o["label"]["text"],
+                                                (o["label"]["xy"], o["label"]["transform"]))]
+    assert not any(schematic._boxes_meet(a, b) for i, a in enumerate(boxes) for b in boxes[i + 1:])
+
+
+def test_label_moves_right_when_left_is_taken(proj):
+    """H first, then G half a grid to its left: G's label goes right of its circle, away from the free pins
+    A..F, rather than over H's label."""
+    d = "7SEG-MPX1-CA#0005"
+    h = schematic.add_terminal(proj, f"{d}.H", "SEGH")
+    g = schematic.add_terminal(proj, f"{d}.G", "SEGG")
+    assert "note" not in g and g["terminal_grid"][1] < h["terminal_grid"][1]
+    sheet = consistent(proj)
+    lab = next(o["label"] for o in sheet.objects if o["type"] == "terminal" and o["label"]["text"] == "SEGG")
+    assert lab["transform"].hex() == schematic._LABEL_RIGHT_OF
+
+
 def test_add_part_mirror_and_turned_labels(proj):
     """A mirrored copy has its pins flipped; a copy turned 90 degrees against its source gets its labels moved
     beside it (checked in Proteus 2026-11-16: net MX = U4.D0 + R1.1, labels clear of the bodies)."""

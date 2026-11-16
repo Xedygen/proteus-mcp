@@ -72,10 +72,22 @@ async def main():
                 res = await s.call_tool(tool, args)
                 if res.is_error:
                     raise RuntimeError(f"{tool}{args}: {res.content[0].text}")
-                return res.structured_content or json.loads(res.content[0].text)
+                out = res.structured_content or json.loads(res.content[0].text)
+                if isinstance(out, dict) and out.get("note"):
+                    print(f"note from {tool} {args.get('pin') or args.get('like') or ''}: {out['note']}")
+                return out
 
             await call("proteus_background", on=False)      # pressing the buttons uses the mouse
             await call("project_open", path=TEMPLATE, name=P, overwrite=True)
+            # make room: the display's pins sit just above U3's port A rows and the buttons' terminals would land
+            # under the pull-ups, so lift the display and move the buttons right before wiring
+            listing = await call("schematic_components", project=P, with_pins=False)
+            parts = {c["ref"]: c for c in (listing["result"] if isinstance(listing, dict) else listing)}
+            x, y = parts[DISPLAY]["grid"]
+            await call("schematic_move", project=P, ref=DISPLAY, x_grid=x, y_grid=y + 10)
+            for b in BUTTONS:
+                x, y = parts[b]["grid"]
+                await call("schematic_move", project=P, ref=b, x_grid=x + 8, y_grid=y)
             # address lines: 8255 A0/A1 from latch Q1/Q2; RESET to ground
             await call("schematic_connect", project=P, a="U2.Q1", b="U3.A0")
             await call("schematic_connect", project=P, a="U2.Q2", b="U3.A1")

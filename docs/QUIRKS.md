@@ -85,6 +85,13 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
   (resistors, buttons) can be changed (verified: a resistor's value).
 - Proteus 8.6 may refuse to open project paths with non-ASCII characters (`tasarım.pdsprj`); project_open
   copies to an ASCII name in the workspace.
+- Terminal labels (measured at 300 DPI, 2026-11-16): Proteus draws the label where the record's label xy says.
+  The label transform `000001000800` right-aligns the text on that point (text left of an up/down terminal's
+  circle, the default) and `000000000800` left-aligns it (text to the right). A down-facing terminal draws its
+  text just above the label point, an up-facing one just below. Capitals are about 0.58 grid wide, 0.8 grid tall.
+- Export Bitmap (File menu, command 22) renders the sheet at 100 to 600 DPI. Its dialog ids: Current Sheet 514,
+  DPI radios 1024 to 1028, Display colours 1539, Output To File 3584 (unchecked = to the clipboard).
+  `sheet_image` uses it and restores the clipboard's text afterwards.
 
 ## Firmware build (MASM 5.10 through DOSBox)
 

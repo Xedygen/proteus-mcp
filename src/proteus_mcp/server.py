@@ -762,6 +762,25 @@ def screenshot(window: str | None = None, max_width: int = 1600) -> Image:
     return Image(data=gui.png_bytes(s.screenshot(window), max_width), format="png")
 
 
+@mcp.tool()
+def sheet_image(dpi: int = 200, crop: list[float] | None = None, max_width: int = 2000,
+                save_to: str | None = None) -> Image:
+    """The whole current schematic sheet rendered by Proteus's Export Bitmap at `dpi` (100/200/300/400/600),
+    much sharper than `screenshot` and independent of the zoom.  `crop` = [x0, y0, x1, y1] as fractions of
+    the sheet (0..1) keeps one region; `save_to` also writes that (cropped) image there at full resolution, before
+    `max_width` scales the returned copy."""
+    s = _require_session()
+    img = s.export_sheet(dpi)
+    if crop:
+        if len(crop) != 4 or not all(0 <= f <= 1 for f in crop) or crop[0] >= crop[2] or crop[1] >= crop[3]:
+            raise ValueError("crop must be [x0, y0, x1, y1] fractions with x0 < x1 and y0 < y1")
+        w, h = img.size
+        img = img.crop((round(crop[0] * w), round(crop[1] * h), round(crop[2] * w), round(crop[3] * h)))
+    if save_to:
+        img.save(save_to, "PNG")
+    return Image(data=gui.png_bytes(img, max_width), format="png")
+
+
 def _address(a: int | str) -> int:
     if isinstance(a, int):
         return a

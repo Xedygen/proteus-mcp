@@ -203,7 +203,12 @@ the passing result in `docs/evidence/`.
 - [x] Review items: unknown pin glyphs refused, parts with unreadable pin tables blocked as boxes, junctions
       tidied when a part is deleted, add_part/move refuse pins on wires or bodies, drop-offset correction no
       longer overshoots.
-- [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart; power-terminal labels on pins 2 grids apart cover the next one).
+- [x] Layout: crowded terminals overlap (lab5 display pins are half a grid apart; power-terminal labels on pins
+      2 grids apart cover the next one). add_terminal now steps a terminal out and, for up/down terminals,
+      may put its label on the other side of the circle, scoring label/wire clashes first, then blocking a
+      neighbour's lead, then distance; a clash it cannot avoid comes back as a `note`. Checked in Proteus at
+      200-300 DPI with the new `sheet_image` (lab5_example: display row, resistor row, pull-ups all clear,
+      2026-11-16).
 - [ ] 2024 labs as extra cases (one circuit drawn from scratch: done, scripts/scratch_example.py).
 - [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
       work/e2e/prompt_*.txt):

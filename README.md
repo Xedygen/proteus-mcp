@@ -127,6 +127,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `proteus_launch`, `proteus_close` | One Proteus instance at a time, only one this server started |
 | `sim_start`, `sim_pause`, `sim_stop`, `sim_status`, `sim_log` | `sim_start` also checks that the 8086 loaded the EXE stored in the project |
 | `screenshot`, `debug_window` | Main window or a named window; Debug-menu popups while paused (memory popups scrolled to an `address`) |
+| `sheet_image` | The whole sheet rendered by Proteus's Export Bitmap at 100 to 600 DPI (sharp at any zoom), optionally cropped and saved |
 | `debug_memory` | A memory popup (8086 Memory Dump, a RAM/ROM part's Memory Contents) as hex rows from any address, through the popup's own Copy All (checked on odev2: RAM00 34/CD) |
 | `sim_click`, `screenshot_part` | Press a button / toggle a switch during a run (real mouse, guarded); close-up of one part |
 | `terminal_type`, `terminal_screenshot` | Type into Virtual Terminals during a run; capture what they show |
