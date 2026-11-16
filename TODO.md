@@ -231,7 +231,10 @@ the passing result in `docs/evidence/`.
       - [~] 2024 lab 5 (minimal prompt, 2026-11-17): 96 turns, about 5.6 USD, 12 min, 0 tool errors; wired the
             whole circuit (Proteus netlist confirmed) but could not simulate: the template's 8086.XML lists no
             files, so Proteus ignored the built EXE. Fixed: firmware_build registers main.asm/Debug.exe there
-            (checked live: "Program Loaded"). Rerun pending.
+            (checked live: "Program Loaded"). Rerun (2026-11-17), stopped by the owner before it saved: it
+            simulated the password check ("8" lights after the right switches, reset clears it, a wrong switch
+            keeps it dark, confirmed in the 8086 registers). One sim_click was lost (the owner moved the mouse
+            during the run, or the first-click-focus problem is back); repeat the run without mouse use.
       - [x] 2024 lab 8 (minimal prompt; template without a firmware project): DAC square 19.997 Hz and sawtooth
             39.86 Hz measured in simulation. Fixed from it: lab_list finds proteus_sablon templates, programs
             for such templates are attached at launch, crash-report prompt declined, top-level log popup.
