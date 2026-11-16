@@ -163,7 +163,8 @@ recognised by structure), 2D graphic (kind 0x20, length-prefixed), script block 
 - Properties: the 4th text record holds the visible property text; a u32 full length follows; the full text
   follows only if its length differs from the visible text's length.
 - Instruments: kind, xy, transform, u16, pstr id, pstr device, 2 text records, property rule as above,
-  u16 flags, u32 wire pointer, 4 bytes; generators then add u8, u32 n, n-4 bytes.
+  u16 flags, u32 wire pointer, 4 bytes; generators then add u8, u32 n, n-4 bytes. Flag 0x100 marks a
+  name the user chose (lab6 `CLOCK`, lab7 `-12v`); without it Proteus replaces the label with "REF(PIN)".
 - Sheet directory (8.6): u16 count, per sheet u32, **u8** name length + name (`CCT000`, `__DEFAULT__`), u16,
   u32 sheet offset. Its own offset is the u32 just before the root sheet signature. Later sheets (template
   sheet with frame and title block) move when the root sheet grows; sheets without any `WIRE\0` are copied

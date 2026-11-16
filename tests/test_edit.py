@@ -164,6 +164,8 @@ def test_generators_report_their_pins(proj):
     consistent(proj)
     g = next(g for g in schematic.generators(proj) if g["name"] == "CK1")
     assert g["pins"] == ["U3.PA0"] and g["clock"] == "1000"
+    gens = {o["labels"][0]["text"]: o for o in schematic.load(proj).objects if o["type"] == "instrument"}
+    assert gens["CK1"]["flags"] == 0x100     # a chosen name; without the flag Proteus shows "REF(PIN)" instead
     schematic.tap(proj, "U2.Q2", "U3.PA0")              # a second pin on the generator's net
     g = next(g for g in schematic.generators(proj) if g["name"] == "CK1")
     assert sorted(g["pins"]) == ["U2.Q2", "U3.PA0"]

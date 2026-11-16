@@ -794,8 +794,10 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
                   distance_grid: int = 3) -> dict:
     """Attach a digital clock generator ($DCLOCK0, square wave starting low) to an unconnected left- or
     right-side pin, e.g. the 8251's TxC/RxC (9600 Hz for 9600 baud at x1) or the ADC0804's CLK IN.
-    The generator's name labels its net, so each generator needs a distinct name (default "REF(PIN)").
-    Its properties live in ROOT.DSN, so this also works without ROOT.CDB changes."""
+    Each generator needs a distinct name (default "REF(PIN)", which Proteus keeps up to date itself). The name
+    is only the generator's label: Proteus's netlist names the net "#nnnnn" and leaves the generator out.
+    Its properties live in ROOT.DSN, so this works without ROOT.CDB changes, also in files that never held
+    a generator (checked in Proteus 2026-11-16)."""
     sheet = load(project)
     ref, pin_name = pin.split(".", 1)
     comp, p = find_pin(sheet, ref, pin_name)
@@ -811,13 +813,14 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
         raise dsn.DsnError("frequency_hz must be positive")
     if distance_grid < 1:
         raise dsn.DsnError("distance_grid must be at least 1")
+    named = bool(name)                     # flag 0x100: a user-set name; without it Proteus shows "REF(PIN)"
     name = name or f"{sheet.name_of(comp)}({p['name']})"
     used = {o["labels"][0]["text"] for o in sheet.objects if o["type"] == "instrument"}
     used |= {o["label"]["text"] for o in sheet.objects if o["type"] == "terminal"}
     used |= {lab["text"] for w in sheet.wires() for lab in w["labels"]}
     if name in used:
-        raise dsn.DsnError(f"the name {name} is already a generator, terminal or wire label; a generator's "
-                           "name labels its net, so pick another")
+        raise dsn.DsnError(f"the name {name} is already a generator, terminal or wire label; pick another so "
+                           "generators and nets stay distinguishable")
     mirror = 0 if out == (-1, 0) else 1                # mirror 0: body on the left, output to the right
     origin = [p["xy"][0] + distance_grid * GRID * out[0], p["xy"][1]]
     _check_clear(sheet, [p["xy"], origin], [p["xy"]])
@@ -837,7 +840,8 @@ def add_generator(project: str | Path, pin: str, frequency_hz: float, name: str 
                        "transform": bytes.fromhex(label_tf + "800"), "style": _GEN_STYLE[0]},
                       {"text": "", "xy": [origin[0] + side * 482600, origin[1] + 254000],
                        "transform": bytes.fromhex(label_tf + "400"), "style": _GEN_STYLE[1]}],
-           "props_n": len(props), "props": props, "props_inline": False, "flags": 0, "pointers": [key],
+           "props_n": len(props), "props": props, "props_inline": False, "flags": 0x100 if named else 0,
+           "pointers": [key],
            "tail": b"\0\0\0\0", "tail_c": 0, "blob_n": 5, "blob": b"\0"}
     sheet.objects.append(gen)
     sheet.objects.append({"type": "wire", "start": key, "flags": 0, "style": _wire_style(sheet, 0),
@@ -1054,7 +1058,7 @@ def labels(project: str | Path) -> dict:
                 e = out.setdefault(lab["text"], {"terminals": 0, "wire_labels": 0, "pins": []})
                 e["wire_labels"] += 1
                 e["pins"] += owner.get(o["start"], [])
-    for o in sheet.objects:                      # clock / DC generators: their name labels their net
+    for o in sheet.objects:                      # clock / DC generators, listed under their label
         if o["type"] == "instrument" and o["id"].startswith("M"):
             props = dict(re.findall(r"\{([^=}]+)=([^}]*)\}", o["props"].decode("latin-1")))
             e = out.setdefault(o["labels"][0]["text"] or o["device"], {"terminals": 0, "wire_labels": 0, "pins": []})

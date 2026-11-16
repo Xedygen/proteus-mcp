@@ -682,6 +682,7 @@ class Session:
 
         if dpi not in self._BMP_DPI:
             raise GuiError(f"dpi must be one of {sorted(self._BMP_DPI)}")
+        self.show_schematic()                       # a paused run brings the Source Code tab to the front
         cb.OpenClipboard()
         try:
             old = cb.GetClipboardData(win32con.CF_UNICODETEXT) if \

@@ -241,8 +241,9 @@ Fixed already: readable tool errors, project_open name clash, proteus_close keep
 exit cleanup, set_property backslashes, README Desktop JSON, stale quirks text and server instructions,
 place-devices verification, generator identity clash.
 
-- [x] add_generator input checks (name vs net labels, plain-number frequency, distance). Embedded-library
-      check for `$DCLOCK0` still open (only matters for files that never held a generator).
+- [x] add_generator input checks (name vs net labels, plain-number frequency, distance). `$DCLOCK0` needs
+      no embedded library entry: on lab5 (no generator before) Proteus loads it without warnings, draws it and
+      simulates (2026-11-16). A chosen name needs instrument flag 0x100, or Proteus shows "REF(PIN)".
 - [x] Wiring results echo the resolved pin name and number (74154 "5" = Y5, pin 6).
 - [x] net_of errors on unknown parts/pins; netlist compiled once per Proteus session, one SDF per project.
 - [x] sim() waits for the requested state. (sim_log still pauses/resumes when the log popup is closed.)
