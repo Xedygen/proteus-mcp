@@ -211,7 +211,8 @@ the passing result in `docs/evidence/`.
             all fixed (first sim_click lost, docked debug panels, clash message, 8255 log note).
       - [x] lab8 (2026-11-16): 116 turns, about 2.3 USD, 7 min. Pot turns gave 03 87 AB BF FF. Fixed from it:
             placement now corrects Proteus's drop offset and redoes parts dropped on wires; sim_start while
-            running. Open: Memory Dump only shows its first page; generators absent from the netlist.
+            running. Open: generators absent from the netlist. (Memory Dump paging: done, debug_memory and
+            debug_window(address=...), checked live 2026-11-16.)
       - [x] lab6 (2026-11-16): 85 turns, about 1.8 USD, 6 min; DEF / NO / DEF (+ UVW) on terminal 2. Fixed from
             it: wires leave pins before turning and detour round parts; generators listed with frequency.
       - [x] odev2 (2026-11-16): 226 turns, about 2.7 USD, 7.5 min; RAM00 34/CD, RAM01 12/AB. Fixed from it: gate

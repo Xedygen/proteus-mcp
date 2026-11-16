@@ -603,6 +603,72 @@ class Session:
                 return h
         raise GuiError(f"opened {hits[0].path!r} but could not find its window")
 
+    @staticmethod
+    def parse_memory_text(text: str) -> dict[int, int]:
+        """'Copy All' text ("002C: CD CD ... | ....") to {address: byte}.  Raises GuiError when the popup shows
+        something other than hex bytes (its Data Type / Display Format were changed)."""
+        mem: dict[int, int] = {}
+        for line in text.splitlines():
+            head, sep, rest = line.partition(":")
+            if not sep or not re.fullmatch(r"[0-9A-Fa-f]+", head.strip()):
+                continue
+            cells = rest.split("|")[0].split()
+            if any(not re.fullmatch(r"[0-9A-Fa-f]{2}", c) for c in cells):
+                raise GuiError(f"memory popup is not showing hex bytes (row {line[:60]!r}); "
+                               "set its Data Type to bytes and Display Format to hex")
+            base = int(head, 16)
+            for i, c in enumerate(cells):
+                mem[base + i] = int(c, 16)
+        return mem
+
+    # command ids of the memory popup's context menu (8086 Memory Dump, RAM/ROM Memory Contents)
+    _MEM_GOTO, _MEM_COPY_ALL = 769, 770
+
+    def memory_goto(self, h: int, address: int) -> None:
+        """Scroll a memory popup to `address` through its own Goto Address dialog (the box reads decimal)."""
+        win32gui.PostMessage(h, win32con.WM_COMMAND, self._MEM_GOTO, 0)
+        d = self._wait_dialog(lambda d: d["title"] == "Goto Address", 5)
+        edit = next(c for c, cls, _ in _children(d["hwnd"]) if cls == "Edit")
+        win32gui.SendMessage(edit, win32con.WM_SETTEXT, 0, str(address))
+        _click_button(d["hwnd"], "OK")
+        time.sleep(0.5)
+
+    def memory_text(self, h: int) -> str:
+        """The whole contents of a memory popup as text, through its 'Copy All' command.  The clipboard is
+        borrowed for this and its previous text put back."""
+        import win32clipboard as cb
+
+        def read():
+            cb.OpenClipboard()
+            try:
+                return cb.GetClipboardData(win32con.CF_UNICODETEXT) if \
+                    cb.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT) else None
+            finally:
+                cb.CloseClipboard()
+
+        def write(text):
+            cb.OpenClipboard()
+            try:
+                cb.EmptyClipboard()
+                if text is not None:
+                    cb.SetClipboardData(win32con.CF_UNICODETEXT, text)
+            finally:
+                cb.CloseClipboard()
+
+        old = read()
+        write(None)
+        try:
+            win32gui.SendMessage(h, win32con.WM_COMMAND, self._MEM_COPY_ALL, 0)
+            t0, text = time.monotonic(), None
+            while time.monotonic() - t0 < 5 and not text:
+                time.sleep(0.2)
+                text = read()
+        finally:
+            write(old)
+        if not text:
+            raise GuiError(f"{win32gui.GetWindowText(h)!r} did not copy anything (not a memory window?)")
+        return text
+
     # ----- screenshots and popups ----------------------------------------------------------
     def screenshot(self, title: str | None = None) -> Image.Image:
         if title is None:

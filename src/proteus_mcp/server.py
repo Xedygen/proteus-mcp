@@ -762,17 +762,57 @@ def screenshot(window: str | None = None, max_width: int = 1600) -> Image:
     return Image(data=gui.png_bytes(s.screenshot(window), max_width), format="png")
 
 
+def _address(a: int | str) -> int:
+    if isinstance(a, int):
+        return a
+    t = a.strip().upper()
+    if t.startswith("0X"):
+        return int(t[2:], 16)
+    if t.endswith("H"):
+        return int(t[:-1], 16)
+    return int(t, 16)                  # addresses written as text are hex, as in Proteus and the lab PDFs
+
+
 @mcp.tool()
-def debug_window(name: str) -> Image:
+def debug_window(name: str, address: int | str | None = None) -> Image:
     """Open a Debug-menu popup while the simulation runs or is paused and return a screenshot of it.
 
     Examples: 'Registers - U1', 'Memory Dump - U1', '8255 Internal Status', 'Source Code - U1', 'Watch Window',
     'Simulation Log'. Pause first for a stable picture. The error lists the available items.
+    `address` scrolls a memory popup there first (int, '0x6000' or '6000H'); debug_memory reads it as text.
     """
     s = _require_session()
     h = s.debug_window(name)
     time.sleep(0.5)
+    if address is not None:
+        s.memory_goto(h, _address(address))
     return Image(data=gui.png_bytes(gui.capture(h)), format="png")
+
+
+@mcp.tool()
+def debug_memory(name: str = "Memory Dump", address: int | str = 0, length: int = 256) -> dict:
+    """Read a memory popup (CPU 'Memory Dump - U1', or a RAM/ROM part's 'Memory Contents - U3') as hex text,
+    `length` bytes (max 4096) from `address` (an int, or text read as hex: '0x6000', '6000H', '6000'), 16 per row. Simulation running or
+    paused; pause for a consistent picture. `range` gives the addresses the popup holds (the 8086 model's
+    own memory is its internal RAM, not RAM/ROM chips on the bus: read those through their own popup)."""
+    s = _require_session()
+    length = max(1, min(int(length), 4096))
+    start = _address(address)
+    h = s.debug_window(name)
+    mem = s.parse_memory_text(s.memory_text(h))
+    if not mem:
+        raise ToolError(f"{gui.win32gui.GetWindowText(h)!r} copied no memory rows")
+    lo, hi = min(mem), max(mem)
+    rows = []
+    for base in range(start - start % 16, start + length, 16):
+        cells = [f"{mem[a]:02X}" if a in mem and start <= a < start + length else "  "
+                 for a in range(base, base + 16)]
+        if any(c.strip() for c in cells):
+            rows.append(f"{base:05X}: {' '.join(cells)}".rstrip())
+    out = {"window": gui.win32gui.GetWindowText(h), "range": [f"{lo:05X}", f"{hi:05X}"], "rows": rows}
+    if not rows:
+        out["note"] = f"{start:05X}..{start + length - 1:05X} is outside what this popup holds"
+    return out
 
 
 def _part_screen_box(s: gui.Session, ref: str, margin_grid: float = 2.0):
