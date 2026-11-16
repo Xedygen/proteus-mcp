@@ -279,6 +279,11 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
         raise dsn.DsnError(f"{pin} is a hidden power pin")
     kind = {"GND": "$TERGROUND", "VCC": "$TERPOWER", "POWER": "$TERPOWER", "VDD": "$TERPOWER"}.get(
         net.upper(), "$TERDEFAULT")
+    # other supply names (+12V, -5V, VEE, V+): a labelled power terminal, which Proteus drives at that rail's
+    # voltage; a plain terminal of that name would only join nets and drive nothing
+    rail = kind == "$TERDEFAULT" and bool(re.fullmatch(r"[+-]?\d+(\.\d+)?V|V(CC|DD|EE|SS)\w*|V[+-]", net, re.I))
+    if rail:
+        kind = "$TERPOWER"
     if p["bus"]:
         # a bus pin (e.g. D[0..7]) takes a bus terminal named like AD[0..7] and a bus wire
         if not re.fullmatch(r".+\[\d+\.\.\d+\]", net):
@@ -309,7 +314,7 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     label_style = template["label"]["style"] if template else _TERMINAL_LABEL_STYLE
     want_flags = 1 if kind == "$TERBUS" else 0
     key = sheet.new_key()
-    label = {"text": net if kind in ("$TERDEFAULT", "$TERBUS") else "", "xy": [origin[0] + label_off[0], origin[1] + label_off[1]],
+    label = {"text": net if kind in ("$TERDEFAULT", "$TERBUS") or rail else "", "xy": [origin[0] + label_off[0], origin[1] + label_off[1]],
              "transform": bytes.fromhex(label_tf), "style": label_style}
     term = {"type": "terminal", "origin": origin, "transform": bytes.fromhex(transform), "device": kind,
             "attributes": bytes.fromhex(_ATTRIBUTES[kind]), "label": label, "pointers": [key]}

@@ -169,6 +169,15 @@ def test_generators_report_their_pins(proj):
     assert sorted(g["pins"]) == ["U2.Q2", "U3.PA0"]
 
 
+def test_supply_names_become_power_terminals(proj):
+    assert schematic.add_terminal(proj, "U2.Q0", "+12V")["terminal"] == "$TERPOWER"
+    assert schematic.add_terminal(proj, "U2.Q5", "VEE")["terminal"] == "$TERPOWER"
+    assert schematic.add_terminal(proj, "U2.Q7", "DATA1")["terminal"] == "$TERDEFAULT"
+    sheet = consistent(proj)
+    texts = {o["label"]["text"] for o in sheet.objects if o["type"] == "terminal" and o["device"] == "$TERPOWER"}
+    assert {"+12V", "VEE"} <= texts
+
+
 def test_delete_wire_by_point(proj):
     sheet = schematic.load(proj)
     holders = schematic._holders(sheet)

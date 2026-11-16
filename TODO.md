@@ -202,7 +202,7 @@ the passing result in `docs/evidence/`.
 - [x] Review items: unknown pin glyphs refused, parts with unreadable pin tables blocked as boxes, junctions
       tidied when a part is deleted, add_part/move refuse pins on wires or bodies, drop-offset correction no
       longer overshoots.
-- [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
+- [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart; power-terminal labels on pins 2 grids apart cover the next one).
 - [ ] 2024 labs as extra cases; one circuit drawn from scratch.
 - [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
       work/e2e/prompt_*.txt):
