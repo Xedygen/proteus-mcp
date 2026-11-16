@@ -81,8 +81,12 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
 - Annotated parts (U1, U2 ...) also have a record in ROOT.CDB, and Proteus takes their **properties and value**
   from there: the same change made only in ROOT.DSN is ignored (8086 CLOCK, 74HC373 value).
 - Any rewrite of ROOT.CDB, even one that keeps every length, makes Proteus hang at "Initializing project..."
-  on the splash screen. So property/value edits of annotated parts are refused by the tools; unannotated parts
-  (resistors, buttons) can be changed (verified: a resistor's value).
+  on the splash screen. So offline property/value edits of annotated parts are refused by the tools; unannotated
+  parts (resistors, buttons) can be changed (verified: a resistor's value).
+- Proteus itself updates ROOT.CDB, but only when it compiles the design: Edit Component then Save writes the new
+  value to ROOT.DSN alone (a fresh start still uses the old one), while Edit Component, a short simulation run,
+  then Save writes both (verified 2026-11-16: 8086 CLOCK 1MHz -> 4MHz; a 2024 template's Program File).
+  `proteus_edit_component(save=True)` and `project_export` do this.
 - Proteus 8.6 may refuse to open project paths with non-ASCII characters (`tasarım.pdsprj`); project_open
   copies to an ASCII name in the workspace.
 - Terminal labels (measured at 300 DPI, 2026-11-16): Proteus draws the label where the record's label xy says.

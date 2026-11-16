@@ -1283,8 +1283,8 @@ def set_property(project: str | Path, ref: str, key: str, value: str) -> dict:
     sheet = load(project)
     comp = sheet.component(ref)
     if _in_cdb(project, comp):
-        raise dsn.DsnError(f"{ref} is an annotated part whose properties Proteus reads from ROOT.CDB, which this "
-                           "tool cannot rewrite yet; change it in Proteus (Edit Component) instead")
+        raise dsn.DsnError(f"{ref} is an annotated part whose properties Proteus reads from ROOT.CDB, which only "
+                           "Proteus may write; use proteus_launch, then proteus_edit_component with save=True")
     text = comp["props"].decode("latin-1")
     pat = re.compile(r"\{" + re.escape(key) + r"=[^}]*\}")
     new = f"{{{key}={value}}}"

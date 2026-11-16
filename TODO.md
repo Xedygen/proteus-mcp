@@ -86,7 +86,7 @@ about the file format), this file.
       Oscilloscope, Memory Contents) as well.
 - [x] Read the simulation log / message window as text if it is reachable; otherwise screenshot it.
 - [x] **First end-to-end proof:** (firmware attach answered: replacing Debug.exe in the ZIP works, verified
-      by the load size in the log. The display check fails on this install; see Needs the owner.) open the 2025 lab5 solution (`labs/2025/lab5/mert_guler/tasarım.pdsprj`,
+      by the load size in the log. The display check failed at first; fixed by the owner's Proteus reinstall, see QUIRKS.md.) open the 2025 lab5 solution (`labs/2025/lab5/mert_guler/tasarım.pdsprj`,
       copied to `work/`), rebuild its `main.asm` with the milestone 1 builder, attach the EXE, start the
       simulation, press a button, screenshot, and see the right digit on the 7-segment display.
       This also answers how firmware is attached in 8.6: test whether replacing
@@ -193,7 +193,9 @@ the passing result in `docs/evidence/`.
 - [x] lab7 part 1: DAC output checked with the voltmeter on a slowed program (scope draws nothing here).
 - [x] lab7 part 2: ADC reads the LDR, motor speed follows it (done by the minimal-prompt fresh session below,
       Application 2: motor voltage follows the torch 0 -> 11.9 V).
-- [ ] Scope: find out why no trace (timebase 0.5 us/div? display/OpenGL setting?).
+- [x] Scope: find out why no trace. Not the circuit or the timebase: a 1 kHz clock generator wired straight to
+      channel A shows nothing either, in all four ISIS graphics modes (0-3, set temporarily, restored), screen
+      grabs pixel-identical. Moved to Needs the owner.
 - [x] Junction taps (`schematic_tap`, connect falls back to it), deleting single wires
       (`schematic_delete_wire`), moving wired parts, maze router for all new wires (2026-11-16, checked in
       Proteus with `scripts/smoke_junction.py`).
@@ -227,7 +229,8 @@ the passing result in `docs/evidence/`.
       - [x] 2024 lab 8 (minimal prompt; template without a firmware project): DAC square 19.997 Hz and sawtooth
             39.86 Hz measured in simulation. Fixed from it: lab_list finds proteus_sablon templates, programs
             for such templates are attached at launch, crash-report prompt declined, top-level log popup.
-            Open: the exported file needs its Program File set once by hand. (screenshot_part came back black
+            (Done 2026-11-16: project_export now sets the Program File in Proteus, compiles, saves, and checks
+            that a fresh start loads the program; same route gives proteus_edit_component(save=True).) (screenshot_part came back black
             for parts placed outside the sheet border, beyond the zoomed view: now clipped to the canvas, with a
             clear error when the part is not visible at all.)
       - Note: the advisor server tool hangs headless sessions; run with --disallowedTools advisor.
@@ -250,3 +253,11 @@ place-devices verification, generator identity clash.
       (New wires come from the maze router, which forbids corners on wires and boxes unreadable parts.)
 - [x] dialog_answer, schematic_labels added; ROM images travel with the project.
 - [x] Docs: FORMAT.md stale "6 of 27 parse" section and NUL bytes near line 121.
+
+## Needs the owner
+
+- [ ] **Digital Oscilloscope draws no trace on this install.** Not a circuit problem: a 1 kHz clock generator on
+      channel A of a fresh copy shows an empty screen in every ISIS graphics mode. Please open any design with
+      a scope by hand (e.g. Labcenter's own samples) and run it: if no trace shows there either, the install's
+      scope (or the display driver it uses) needs looking at; if it does, tell me what differs. Meanwhile the
+      tools check analog outputs with voltmeters (see QUIRKS.md).

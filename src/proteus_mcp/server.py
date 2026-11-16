@@ -245,9 +245,55 @@ def project_export(project: str, dest: str) -> dict:
             if f.exists():
                 shutil.copyfile(f, d.with_name(d.stem + suffix))
                 extra.append(d.stem + suffix)
-        out["note"] = (f"the project has no firmware project; its program is {d.stem}_8086.exe beside it. In "
-                       "Proteus, open the 8086 (Edit Component) and set Program File to that file once, then save.")
+        try:
+            out["program_file"] = _bake_program(d, d.stem + "_8086.exe")
+        except Exception as e:                       # Proteus busy, non-ASCII path, unexpected dialog ...
+            out["note"] = (f"the project has no firmware project; its program is {d.stem}_8086.exe beside it and "
+                           f"could not be linked automatically ({e}). In Proteus, open the 8086 (Edit Component), "
+                           "set Program File to that file once, then save.")
     return out
+
+
+def _bake_program(project: Path, program: str) -> dict:
+    """Set the 8086's Program File of an exported project to `program` (a file beside it, by relative name) in
+    Proteus's own Edit Component dialog and save with Proteus, then open it again and check that the program
+    loads.  Proteus keeps that property in ROOT.CDB, which only Proteus may write."""
+    if _session is not None and _session.alive():
+        raise ValueError("Proteus is already running (proteus_close first)")
+    if not str(project.resolve()).isascii():
+        raise ValueError("Proteus 8.6 does not open non-ASCII project paths")
+    cpu = _cpu_ref(project)
+    want = _exe_load_size((project.parent / program).read_bytes())
+    s = gui.Session.launch(project)
+    try:
+        s.edit_component(cpu, _field_labels(project, ["PROGRAM"]), {"PROGRAM": program})
+        # the dialog changes the schematic (ROOT.DSN); Proteus copies it into its database (ROOT.CDB, which is
+        # what a fresh start reads) when it compiles the design, so run once before saving
+        s.sim("start", settle=2.0)
+        s.sim("stop")
+        s.save()
+    finally:
+        _end(s)
+    s = gui.Session.launch(project)                  # a fresh start must now load the program by itself
+    try:
+        s.sim("start", settle=2.0)
+        loaded = _firmware_check(s.sim_log(), want)["program_loaded_bytes"]
+        s.sim("stop")
+    finally:
+        _end(s)
+    if loaded != want:
+        raise RuntimeError(f"after saving, the 8086 loaded {loaded} bytes instead of {want}")
+    return {"cpu": cpu, "program": program, "verified_load_bytes": loaded}
+
+
+def _end(s: "gui.Session") -> None:
+    """Close a Proteus started for a one-off job; end that process if it will not close."""
+    try:
+        if s.close().get("closed"):
+            return
+    except Exception:
+        pass
+    s.kill()
 
 
 # ----- firmware ----------------------------------------------------------------------------------
@@ -708,18 +754,22 @@ def sim_status() -> dict:
 
 
 @mcp.tool()
-def proteus_edit_component(ref: str, properties: dict[str, str]) -> dict:
+def proteus_edit_component(ref: str, properties: dict[str, str], save: bool = False) -> dict:
     """Change properties of any part, annotated ones included (e.g. {"CLOCK": "5MHz"} on the 8086,
     {"FILE": "00.bin"} on a ROM, {"PROGRAM": "C:/path/prog.exe"}), through Proteus's own Edit Component dialog
-    in the running Proteus. The change applies to this Proteus session only: Proteus keeps annotated parts'
-    stored values in ROOT.CDB, which it does not rewrite on save, so redo it after each proteus_launch.
-    For unannotated parts schematic_set_property makes a lasting change offline. The simulation must be
-    stopped."""
+    in the running Proteus. The simulation must be stopped.
+    save=False: this Proteus session only. save=True: Proteus compiles the design once (a short simulation run,
+    which copies the change into ROOT.CDB, where annotated parts' values live) and saves the project, so the
+    change lasts. For unannotated parts schematic_set_property also makes a lasting change offline."""
     s = _require_session()
     if s.sim_state() in ("running", "paused"):
         raise ValueError("stop the simulation first (sim_stop)")
     res = s.edit_component(ref, _field_labels(s.project, properties), {k: str(v) for k, v in properties.items()})
-    return {"ref": ref, "session_only": True, **res}
+    if save:
+        s.sim("start", settle=2.0)
+        s.sim("stop")
+        s.save()
+    return {"ref": ref, "session_only": not save, **res}
 
 
 def _field_labels(project: Path, keys) -> dict[str, list[str]]:

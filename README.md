@@ -143,7 +143,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `schematic_add_terminal`, `schematic_add_terminals` | GND, power or named-net terminal on a pin (`AD0` joins the AD bus line). Supply names (`+12V`, `-5V`, `VEE`, `V+`) become a labelled power terminal, so Proteus drives that rail. The plural takes a list |
 | `schematic_add_wire_label` | Name a net with a wire label; wires and terminals with the same name are one net (the label is placed clear of pins and of bodies estimated from pin positions; a body that extends past its pins, like the 7-segment display, can still be overlapped, so pass `at_grid` then) |
 | `schematic_rename_label` | Rename terminals / wire labels (e.g. lab7's YA1..YA6) |
-| `schematic_set_property`, `schematic_set_value` | Properties / value of unannotated parts (annotated ones live in ROOT.CDB, refused) |
+| `schematic_set_property`, `schematic_set_value` | Properties / value of unannotated parts, offline (annotated ones live in ROOT.CDB: use `proteus_edit_component` with `save=True`) |
 | `schematic_add_generator` | Digital clock generator on a pin, e.g. 9600 Hz on the 8251's TxC/RxC |
 | `schematic_delete`, `schematic_move` | Delete a part or generator with its wires (annotated parts such as an 8251 are deleted by Proteus itself, then the terminals, generators and junctions left at the far ends are tidied); move a part, dragging its wires along (re-routed where needed) |
 | `terminal_mode` | Virtual Terminal options during a run, e.g. Hex Display Mode (real mouse) |
@@ -151,7 +151,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `schematic_labels` | Offline list of net names (terminals, wire labels) and the pins wired to them |
 | `schematic_check` | Offline: unconnected pins per part, terminals whose partner is missing or misspelled, parts outside the sheet border (they simulate but cannot be seen or clicked) |
 | `dialog_answer` | Click a button in a Proteus dialog the server does not answer itself |
-| `proteus_edit_component` | Change any part's properties (annotated too, e.g. the 8086 clock) through Proteus's own dialog, for the current session |
+| `proteus_edit_component` | Change any part's properties (annotated too, e.g. the 8086 clock) through Proteus's own dialog, for the current session, or lasting with `save=True` (Proteus compiles once and saves) |
 
 ## Use it on a lab PDF
 
