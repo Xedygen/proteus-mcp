@@ -67,8 +67,13 @@ terminal, switched to Hex Display Mode by the tool, shows the samples; turning t
 all ROM/RAM address, data and control lines, the ROM images copied with the project, and a program calling
 the two FAR routines. Paused, RAM00 shows 34 / CD and RAM01 12 / AB (`docs/evidence/odev2_ram.png`).
 
-Not built yet: editing annotated parts' properties/values (ROOT.CDB), moving parts that already have wires,
-joining a pin to a wire that is already in place (junctions), tidy layout of crowded terminals.
+Wires are routed by a grid maze router (`route.py`): it never passes through a part body, pin, wire end,
+junction or terminal, never runs along an existing wire, and only crosses wires at right angles. Junction
+taps, wire deletion and moving wired parts were checked in Proteus with `scripts/smoke_junction.py` (its own
+netlist shows the intended nets; the file opens without a dialog).
+
+Not built yet: editing annotated parts' properties/values (ROOT.CDB), tidy layout of crowded terminals,
+bus wires drawn between pins.
 
 ## Install
 
@@ -123,13 +128,15 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `proteus_background` | Background mode (default): Proteus runs off-screen without taking focus; mouse-based tools pause |
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
 | `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |
-| `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0` |
+| `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0`; if one of them is already wired it taps that net instead |
+| `schematic_tap` | Wire a free pin onto an existing net (a wired pin, terminal or wire label) with a junction dot |
+| `schematic_delete_wire` | Delete the wire on a pin or at a point; a junction left with two wires is merged away |
 | `schematic_add_part` | Place a copy of an unannotated part already in the design (e.g. a resistor) with its own reference |
 | `schematic_add_terminal`, `schematic_add_terminals` | GND, power or named-net terminal on a pin (`AD0` joins the AD bus line); the plural takes a list |
 | `schematic_rename_label` | Rename terminals / wire labels (e.g. lab7's YA1..YA6) |
 | `schematic_set_property`, `schematic_set_value` | Properties / value of unannotated parts (annotated ones live in ROOT.CDB, refused) |
 | `schematic_add_generator` | Digital clock generator on a pin, e.g. 9600 Hz on the 8251's TxC/RxC |
-| `schematic_delete`, `schematic_move` | Delete a part or generator with its wires; move an unwired part (after placing one) |
+| `schematic_delete`, `schematic_move` | Delete a part or generator with its wires; move a part, dragging its wires along (re-routed where needed) |
 | `terminal_mode` | Virtual Terminal options during a run, e.g. Hex Display Mode (real mouse) |
 | `lab_list` | Lab folders with their PDF, template and reference solutions |
 | `schematic_labels` | Offline list of net names (terminals, wire labels) and the pins wired to them |

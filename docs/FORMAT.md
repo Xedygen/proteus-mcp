@@ -115,6 +115,13 @@ i32 x, i32 y
 4 * u32                  pointers to attached wires
 ```
 
+Proteus also writes junctions holding only one or two wires; used slots come first, zeros last.
+
+**First-holder rule** (held for all 6128 junction wires in the samples, `scripts/probe_junctions.py`): a wire's
+`points[0]` lies at whichever of its two holders comes first in the file (object order, then pointer slot);
+`points[-1]` at the other. Proteus enforces it on load: a reversed wire is drawn with diagonal lines from each
+holder to the wrong end. Edits that rewrite a wire keep this orientation.
+
 ### Telling records apart
 
 The kind byte is ambiguous: `0x01` is a junction and also the flag byte of a bus wire. Wires are recognised

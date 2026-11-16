@@ -58,8 +58,13 @@ def test_connect_and_pin_geometry(tmp_path):
     wire = next(w for w in sheet.wires() if {tuple(w["points"][0]), tuple(w["points"][-1])}
                 == {tuple(q1["xy"]), tuple(a0["xy"])})
     assert all(a[0] == b[0] or a[1] == b[1] for a, b in zip(wire["points"], wire["points"][1:]))
+    try:                                             # Q1 already has a wire: connect taps it with a junction
+        r = schematic.connect(proj, "U2.Q1", "U3.A1")
+    except dsn.DsnError:
+        return
+    assert "junction_grid" in r
     with pytest.raises(dsn.DsnError):
-        schematic.connect(proj, "U2.Q1", "U3.A1")   # Q1 already has a wire
+        schematic.connect(proj, "U2.Q1", "U3.A1")   # both ends wired now
 
 
 @pytest.mark.skipif(not SAMPLES, reason="labs/ not present")

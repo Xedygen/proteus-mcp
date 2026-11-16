@@ -26,7 +26,8 @@ Tools for Proteus 8.6 (Labcenter) on this Windows machine, aimed at the YTU BLM3
 
 Typical flow for a lab PDF: lab_list() to find the lab's template (taslak.pdsprj) -> project_open ->
 schematic_components (parts, pins, connection state) -> wire it offline with schematic_add_terminals (many
-named nets / GND / VCC per call; schematic_add_terminal for one), schematic_connect, schematic_add_part, schematic_add_generator, schematic_rename_label,
+named nets / GND / VCC per call; schematic_add_terminal for one), schematic_connect (two free pins), schematic_tap (free pin onto an existing
+net, junction), schematic_delete_wire, schematic_add_part, schematic_add_generator, schematic_rename_label,
 schematic_delete / schematic_move (new device types: schematic_place_devices) -> firmware_build(source=...)
 (MASM 5.10, errors with line numbers) -> schematic_check (missing wires, lone terminals) -> proteus_launch -> net_of / netlist to check wiring -> sim_start ->
 sim_log, screenshot, screenshot_part, terminal_screenshot, terminal_mode, sim_click, debug_window -> sim_stop
@@ -434,9 +435,27 @@ def schematic_labels(project: str) -> dict:
 
 @mcp.tool()
 def schematic_move(project: str, ref: str, x_grid: float, y_grid: float) -> dict:
-    """Move an unwired part to a grid position (use after schematic_place_devices, whose drop point is only
-    approximate, before wiring it). Returns the new pin positions."""
+    """Move a part to a grid position (e.g. after schematic_place_devices, whose drop point is only
+    approximate). Wires on its pins are dragged along and kept orthogonal (connections stay); check the
+    look with a screenshot afterwards. Returns the new pin positions."""
     return schematic.move_part(_closed(project), ref, x_grid, y_grid)
+
+
+@mcp.tool()
+def schematic_tap(project: str, pin: str, target: str, at_grid: list[float] | None = None) -> dict:
+    """Wire an unconnected pin onto a net that already has wires, with a junction dot (a T connection):
+    `target` is a wired pin ("U2.Q1") or a terminal / wire-label name ("A0"). The nearest free point on that
+    net's drawn wires is used, or `at_grid` [x, y] on one of them. Use it when schematic_connect refuses
+    because the other pin already has a wire (e.g. a second gate input on the same signal, a pull-up)."""
+    return schematic.tap(_closed(project), pin, target, at_grid)
+
+
+@mcp.tool()
+def schematic_delete_wire(project: str, pin: str | None = None, at_grid: list[float] | None = None) -> dict:
+    """Delete one wire: the wire on pin "REF.PIN", or the wire passing through grid point `at_grid` [x, y].
+    A terminal at its end goes too; a junction left with two wires is merged back into one wire. Use it to
+    undo a wrong connection or free a pin."""
+    return schematic.delete_wire(_closed(project), pin, at_grid)
 
 
 @mcp.tool()

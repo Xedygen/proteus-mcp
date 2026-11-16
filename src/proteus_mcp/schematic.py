@@ -11,7 +11,7 @@ import re
 import struct
 from pathlib import Path
 
-from . import cdb, dsn, pdsprj
+from . import cdb, dsn, pdsprj, route
 from .devices import find_pin, pins
 
 GRID = dsn.GRID
@@ -173,6 +173,12 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
     cb, pb = find_pin(sheet, rb, pb_name)
     if pa is pb:
         raise dsn.DsnError(f"{a} and {b} are the same pin")
+    if pa["connected"] != pb["connected"] and not (pa["bus"] or pb["bus"]):
+        # one end already wired: join the free pin onto that net with a junction
+        free, wired = (a, b) if pb["connected"] else (b, a)
+        out = tap(project, free, wired)
+        out["note"] = f"{wired} already had a wire, so {free} was tapped onto its net with a junction"
+        return out
     for comp, pin, label in ((ca, pa, a), (cb, pb, b)):
         if pin["connected"]:
             raise dsn.DsnError(f"{label} already has a wire; Proteus allows one wire per pin end")
@@ -188,6 +194,14 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
         points = _route_pins(pa, pb, round(via_x_grid * GRID))
         _check_clear(sheet, points, [pa["xy"], pb["xy"]])
     else:
+        points = None
+        try:
+            points, _ = route.route(sheet, pa, route.pin_goal(pb), {tuple(pa["xy"]), tuple(pb["xy"])})
+            points = _simplify(points)
+            _check_clear(sheet, points, [pa["xy"], pb["xy"]])
+        except dsn.DsnError:
+            points = None
+    if points is None:
         mid = round((pa["xy"][0] + pb["xy"][0]) / 2 / GRID)
         lo, hi = sorted((pa["xy"][0] // GRID, pb["xy"][0] // GRID))
         # columns between the pins first, then further out (a route may go round a part)
@@ -309,6 +323,231 @@ def add_terminal(project: str | Path, pin: str, net: str, distance_grid: int = 2
     # echo what the pin resolved to: names win over numbers, so on a 74154 "5" is output Y5 (pin 6)
     return {"pin": pin, "resolved": f"{p['name']} (pin {p['number'] or '?'})", "terminal": kind, "net": net,
             "terminal_grid": [t[0] / GRID, t[1] / GRID]}
+
+
+# ----- nets made of wires and junctions -----------------------------------------------------------------
+def _holders(sheet: dsn.Sheet) -> dict[int, list[tuple[dict, int]]]:
+    """wire key -> [(object, pointer slot)] in file order (the first holder owns points[0])."""
+    out: dict[int, list[tuple[dict, int]]] = {}
+    for o in sheet.objects:
+        for slot, p in enumerate(o.get("pointers", [])):
+            if p:
+                out.setdefault(p, []).append((o, slot))
+    return out
+
+
+def _cluster(sheet: dsn.Sheet, key: int) -> list[dict]:
+    """Every wire joined to wire `key` through junctions (one drawn net fragment)."""
+    wires = {w["start"]: w for w in sheet.wires()}
+    holders = _holders(sheet)
+    seen, todo = set(), [key]
+    while todo:
+        k = todo.pop()
+        if k in seen or k not in wires:
+            continue
+        seen.add(k)
+        for o, _ in holders.get(k, []):
+            if o["type"] == "junction":
+                todo += [p for p in o["pointers"] if p]
+    return [wires[k] for k in seen]
+
+
+def _target_wires(sheet: dsn.Sheet, target: str) -> list[dict]:
+    """Wires of the net named by `target`: "REF.PIN" of a wired pin, or a terminal / wire label name."""
+    keys = []
+    if "." in target:
+        ref, pin_name = target.split(".", 1)
+        try:
+            comp, p = find_pin(sheet, ref, pin_name)
+        except dsn.DsnError:
+            comp = None
+        if comp is not None:
+            key = comp["pointers"][p["slot"]]
+            if not key:
+                raise dsn.DsnError(f"{target} has no wire; connect two free pins with schematic_connect")
+            keys.append(key)
+    if not keys:
+        for o in sheet.objects:
+            if o["type"] == "terminal" and o["label"]["text"] == target and o["pointers"][0]:
+                keys.append(o["pointers"][0])
+            elif o["type"] == "wire" and any(t["text"] == target for t in o["labels"]):
+                keys.append(o["start"])
+    if not keys:
+        raise dsn.DsnError(f"{target!r} is neither a wired pin (REF.PIN) nor a terminal / wire label name")
+    out, seen = [], set()
+    for k in keys:
+        for w in _cluster(sheet, k):
+            if w["start"] not in seen:
+                seen.add(w["start"])
+                out.append(w)
+    return out
+
+
+def _split_wire(sheet: dsn.Sheet, w: dict, at: list[int]) -> tuple[int, int]:
+    """Split wire `w` at point `at` (on one of its segments) into w (first holder .. at) and a new wire
+    (at .. second holder).  Returns the two keys; the caller ties both to a junction at `at`."""
+    holders = _holders(sheet).get(w["start"], [])
+    if len(holders) != 2:
+        raise dsn.DsnError("that wire is attached at one end only; it cannot be tapped")
+    pts = w["points"]
+    for i, (a, b) in enumerate(zip(pts, pts[1:])):
+        if _on_segment(tuple(at), a, b):
+            break
+    else:
+        raise dsn.DsnError("tap point is not on the wire")
+    first = pts[:i + 1] + ([at] if at != pts[i] else [])
+    second = ([at] if at != pts[i + 1] else []) + pts[i + 1:]
+    if len(first) < 2 or len(second) < 2:
+        raise dsn.DsnError("tap point is a wire end; use the object there instead")
+    new_key = sheet.new_key()
+    w["points"] = first
+    # the junction is appended after both holders, so each half's points[0] is at its other holder
+    sheet.objects.append({"type": "wire", "start": new_key, "flags": w["flags"], "style": w["style"],
+                          "labels": [], "points": second[::-1]})
+    obj, slot = holders[1]
+    obj["pointers"][slot] = new_key
+    return w["start"], new_key
+
+
+def _segments_points(w: dict):
+    """Grid points along a wire's segments."""
+    for a, b in zip(w["points"], w["points"][1:]):
+        if a[0] == b[0]:
+            step = GRID if b[1] > a[1] else -GRID
+            for y in range(a[1], b[1] + step, step):
+                yield [a[0], y]
+        elif a[1] == b[1]:
+            step = GRID if b[0] > a[0] else -GRID
+            for x in range(a[0], b[0] + step, step):
+                yield [x, a[1]]
+
+
+def tap(project: str | Path, pin: str, target: str, at_grid: list[float] | None = None) -> dict:
+    """Wire an unconnected pin onto an existing net: `target` is a wired pin ("U3.A0") or a terminal / wire
+    label name.  The nearest free point on that net's wires is found (or `at_grid` [x, y] is used), the wire
+    there is split and a junction dot joins the three wires, as Proteus draws a T connection."""
+    sheet = load(project)
+    ref, pin_name = pin.split(".", 1)
+    comp, p = find_pin(sheet, ref, pin_name)
+    if p["connected"]:
+        raise dsn.DsnError(f"{pin} already has a wire; Proteus allows one wire per pin end")
+    if p["hidden"] or p["bus"]:
+        raise dsn.DsnError(f"{pin} is a hidden or bus pin")
+    net = _target_wires(sheet, target)
+    net = [w for w in net if w["flags"] == 0]
+    if not net:
+        raise dsn.DsnError(f"{target} has no plain (non-bus) wire to tap")
+    spots = _hot_spots(sheet)
+    junctions = {tuple(o["origin"]): o for o in sheet.objects if o["type"] == "junction"}
+    net_keys = {w["start"] for w in net}
+    open_j = {k for k, j in junctions.items() if 0 in j["pointers"] and set(j["pointers"]) & net_keys}
+    goals = route.wire_goals(net, spots - open_j)
+    for k in open_j:                     # a junction with a free slot can take the wire directly
+        if k[0] % GRID == 0 and k[1] % GRID == 0:
+            w = next(w for w in net if w["start"] in junctions[k]["pointers"])
+            goals[(k[0] // GRID, k[1] // GRID)] = ([], (list(k), w))
+    if at_grid is not None:
+        t = [round(at_grid[0] * GRID), round(at_grid[1] * GRID)]
+        goals = {n: g for n, g in goals.items() if g[1][0] == t}
+        if not goals:
+            raise dsn.DsnError(f"{at_grid} is not a free point on a wire of {target}")
+    if not goals:
+        raise dsn.DsnError(f"no free point on {target}'s wires to tap")
+    try:
+        pts, (t, w) = route.route(sheet, p, goals, {tuple(p["xy"])} | open_j | {tuple(g[1][0]) for g in goals.values()})
+        pts = _simplify(pts)
+        _check_clear(sheet, pts, [p["xy"], t])
+    except dsn.DsnError as e:
+        raise dsn.DsnError(f"no free route from {pin} to {target} ({e}); pass at_grid or use a terminal")
+    new_key = sheet.new_key()
+    j = junctions.get(tuple(t))
+    if j is not None and 0 in j["pointers"]:
+        j["pointers"][j["pointers"].index(0)] = new_key
+        # the pin's part may come after the junction in the file: points[0] goes to the first holder
+        if sheet.objects.index(comp) > sheet.objects.index(j):
+            pts = pts[::-1]
+        sheet.objects.append({"type": "wire", "start": new_key, "flags": 0, "style": w["style"],
+                              "labels": [], "points": pts})
+    else:
+        k1, k2 = _split_wire(sheet, w, t)
+        new_key = sheet.new_key()
+        sheet.objects.append({"type": "wire", "start": new_key, "flags": 0, "style": w["style"],
+                              "labels": [], "points": pts})
+        sheet.objects.append({"type": "junction", "origin": t, "pointers": [k1, k2, new_key, 0]})
+    comp["pointers"][p["slot"]] = new_key
+    sheet.reschedule()
+    save(project, sheet)
+    return {"pin": pin, "resolved": f"{p['name']} (pin {p['number'] or '?'})", "joined": target,
+            "junction_grid": [t[0] / GRID, t[1] / GRID], "points_grid": [[q[0] / GRID, q[1] / GRID] for q in pts]}
+
+
+def _merge_at(sheet: dsn.Sheet, j: dict) -> None:
+    """A junction left with exactly two wires: join them into one wire and drop the junction."""
+    keys = [k for k in j["pointers"] if k]
+    wires = {w["start"]: w for w in sheet.wires()}
+    a, b = wires[keys[0]], wires[keys[1]]
+    holders = _holders(sheet)
+    ha = next(h for h in holders[a["start"]] if h[0] is not j)
+    hb = next(h for h in holders[b["start"]] if h[0] is not j)
+    pa = a["points"] if a["points"][-1] == j["origin"] else a["points"][::-1]   # holder a .. junction
+    pb = b["points"] if b["points"][0] == j["origin"] else b["points"][::-1]    # junction .. holder b
+    pts = pa + pb[1:]
+    order = {id(o): i for i, o in enumerate(sheet.objects)}
+    if (order[id(ha[0])], ha[1]) > (order[id(hb[0])], hb[1]):
+        pts = pts[::-1]
+    try:
+        pts = _simplify(pts)
+    except dsn.DsnError:
+        pass
+    a["points"], a["labels"] = pts, a["labels"] + b["labels"]
+    hb[0]["pointers"][hb[1]] = a["start"]
+    sheet.objects = [o for o in sheet.objects if o is not b and o is not j]
+
+
+def delete_wire(project: str | Path, pin: str | None = None, at_grid: list[float] | None = None) -> dict:
+    """Delete one wire: the one on pin "REF.PIN", or the one passing through grid point `at_grid`.  A terminal
+    left with no wire goes too; a junction left with two wires is merged into one wire."""
+    sheet = load(project)
+    if pin:
+        ref, pin_name = pin.split(".", 1)
+        comp, p = find_pin(sheet, ref, pin_name)
+        key = comp["pointers"][p["slot"]]
+        if not key:
+            raise dsn.DsnError(f"{pin} has no wire")
+    elif at_grid is not None:
+        t = (round(at_grid[0] * GRID), round(at_grid[1] * GRID))
+        hits = [w for w in sheet.wires() if any(_on_segment(t, a, b) for a, b in zip(w["points"], w["points"][1:]))]
+        if not hits:
+            raise dsn.DsnError(f"no wire passes through {at_grid}")
+        if len(hits) > 1:
+            raise dsn.DsnError(f"{len(hits)} wires meet at {at_grid}; pick a point inside one wire")
+        key = hits[0]["start"]
+    else:
+        raise dsn.DsnError("give pin or at_grid")
+    wire = next(w for w in sheet.wires() if w["start"] == key)
+    removed_terms, merged = [], 0
+    doomed = [wire]
+    touched = []
+    for o, slot in _holders(sheet).get(key, []):
+        o["pointers"][slot] = 0
+        if o["type"] == "terminal":
+            doomed.append(o)
+            removed_terms.append(o["label"]["text"] or o["device"])
+        elif o["type"] == "junction":
+            touched.append(o)
+    ids = {id(o) for o in doomed}
+    sheet.objects = [o for o in sheet.objects if id(o) not in ids]
+    for j in touched:
+        n = sum(1 for k in j["pointers"] if k)
+        if n == 2:
+            _merge_at(sheet, j)
+            merged += 1
+        elif n == 0:
+            sheet.objects = [o for o in sheet.objects if o is not j]
+    sheet.reschedule()
+    save(project, sheet)
+    return {"deleted_wire_points_grid": [[q[0] / GRID, q[1] / GRID] for q in wire["points"]],
+            "terminals_removed": removed_terms, "junctions_merged": merged}
 
 
 def _num(x: float) -> str:
@@ -512,33 +751,101 @@ def labels(project: str | Path) -> dict:
     return dict(sorted(out.items()))
 
 
+def _reroute(sheet: dsn.Sheet, w: dict, pin: dict, far: list[int], comp: dict, slot: int) -> list[list[int]] | None:
+    """A fresh maze route for wire w from its far end `far` to `pin` (returned far end first), or None."""
+    holder = next(((o, s) for o, s in _holders(sheet)[w["start"]] if not (o is comp and s == slot)), None)
+    if holder is None:
+        return None
+    o, s = holder
+    if o["type"] == "component":
+        goals = route.pin_goal(pins(sheet, o)[s])
+    elif far[0] % GRID == 0 and far[1] % GRID == 0:
+        goals = {(far[0] // GRID, far[1] // GRID): ([], None)}
+    else:
+        return None
+    i = sheet.objects.index(w)
+    del sheet.objects[i]                     # the wire being replaced is no obstacle
+    try:
+        pts, _ = route.route(sheet, pin, goals, {tuple(pin["xy"]), tuple(far)})
+        pts = _simplify(pts)
+        _check_clear(sheet, pts, [pin["xy"], far])
+    except dsn.DsnError:
+        return None
+    finally:
+        sheet.objects.insert(i, w)
+    return pts[::-1]
+
+
 def move_part(project: str | Path, ref: str, x_grid: float, y_grid: float) -> dict:
-    """Move a part that has no wires yet to a grid position (e.g. right after schematic_place_devices, whose
-    drop point is only approximate).  Its labels move with it; refuses if a pin would land on an existing
-    connection point."""
+    """Move a part to a grid position.  Its labels move with it and its wires are dragged along (rubber band,
+    or a fresh route where the stretched wire would enter a pin through its own part); refuses if a pin would
+    land on an existing connection point or wire."""
     sheet = load(project)
     comp = sheet.component(ref)
-    if any(comp["pointers"]):
-        raise dsn.DsnError(f"{ref} already has wires; moving wired parts is not supported")
     half = GRID // 2
     origin = [round(x_grid * GRID / half) * half, round(y_grid * GRID / half) * half]
     dx, dy = origin[0] - comp["origin"][0], origin[1] - comp["origin"][1]
-    spots = _hot_spots(sheet) - {tuple(p["xy"]) for p in pins(sheet, comp)}
+    before = {p["slot"]: p for p in pins(sheet, comp)}
+    own_wires = {k for k in comp["pointers"] if k}
+    spots = _hot_spots(sheet) - {tuple(p["xy"]) for p in before.values()}
+    spots -= {tuple(pt) for w in sheet.wires() if w["start"] in own_wires for pt in (w["points"][0], w["points"][-1])}
     comp["origin"] = origin
     for t in comp["labels"]:
         t["xy"] = [t["xy"][0] + dx, t["xy"][1] + dy]
-    clash = [p for p in pins(sheet, comp) if tuple(p["xy"]) in spots and not p["hidden"]]
+    after = {p["slot"]: p for p in pins(sheet, comp)}
+    clash = [p for p in after.values() if tuple(p["xy"]) in spots and not p["hidden"]]
     if clash:
         raise dsn.DsnError(f"pin {clash[0]['name']} would land on an existing connection point")
-    for p in pins(sheet, comp):
+    for p in after.values():
         for w in sheet.wires():
-            if not p["hidden"] and any(_on_segment(tuple(p["xy"]), a, b) for a, b in zip(w["points"], w["points"][1:])):
+            if w["start"] in own_wires or p["hidden"]:
+                continue
+            if any(_on_segment(tuple(p["xy"]), a, b) for a, b in zip(w["points"], w["points"][1:])):
                 raise dsn.DsnError(f"pin {p['name']} would land on an existing wire at "
                                    f"{[p['xy'][0] / GRID, p['xy'][1] / GRID]}; pick another spot")
+    # wired pins: drag each wire's end along (rubber band), keeping the wire orthogonal
+    wires = {w["start"]: w for w in sheet.wires()}
+    stretched = []
+    for slot, key in enumerate(comp["pointers"]):
+        if not key:
+            continue
+        w, old, new, out = wires[key], before[slot]["xy"], after[slot]["xy"], after[slot]["out"]
+        pts = [list(q) for q in w["points"]]
+        ends = [i for i in (0, len(pts) - 1) if pts[i] == old]
+        if not ends:
+            continue
+        at_end = ends[0] == len(pts) - 1
+        seq = pts[:] if at_end else pts[::-1]               # make the pin end last
+        seq[-1] = new
+        prev = seq[-2]
+        if prev[0] != new[0] and prev[1] != new[1]:
+            # leave the pin along the way it faces, then turn
+            corner = [prev[0], new[1]] if out[0] else [new[0], prev[1]]
+            seq.insert(-1, corner)
+        sgn = lambda v: (v > 0) - (v < 0)
+        try:
+            seq = _simplify(seq)
+            ok = (sgn(seq[-1][0] - seq[-2][0]), sgn(seq[-1][1] - seq[-2][1])) == (-out[0], -out[1])
+        except dsn.DsnError:
+            ok = False                       # doubled back on itself
+        if ok:
+            i = sheet.objects.index(w)
+            del sheet.objects[i]
+            ok = route.path_clear(route.Obstacles(sheet, {tuple(new), tuple(seq[0])}), seq)
+            sheet.objects.insert(i, w)
+        if not ok:
+            # the stretched wire would cross a part, enter the pin from inside or run along another wire
+            seq = _reroute(sheet, w, after[slot], seq[0], comp, slot)
+            if seq is None:
+                raise dsn.DsnError(f"no clean way to drag the wire on {ref}.{after[slot]['name']} to the new "
+                                   f"position; pick another spot or delete the wire first")
+        w["points"] = seq if at_end else seq[::-1]
+        stretched.append(f"{sheet.name_of(comp)}.{after[slot]['name']}")
     save(project, sheet)
-    return {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID],
+    return {"part": ref, "grid": [origin[0] / GRID, origin[1] / GRID], "wires_stretched": stretched,
+            "note": "wires were dragged along; check the layout with a screenshot" if stretched else None,
             "pins": [{"name": p["name"], "grid": [p["xy"][0] / GRID, p["xy"][1] / GRID]}
-                     for p in pins(sheet, comp) if not p["hidden"]]}
+                     for p in after.values() if not p["hidden"]]}
 
 
 def delete_part(project: str | Path, ref: str) -> dict:

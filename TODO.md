@@ -115,7 +115,7 @@ Two routes. Try A first; it is deterministic and needs no screen. Fall back to B
       wire, and does the netlist (Tools, Netlist Compiler, or just the simulation) see the connection?
 - [x] Same experiment for `ROOT.CDB`: leave it untouched, then try removing or emptying it, and see which
       Proteus accepts. This decides whether the database must be written too.
-- [~] (terminals incl. GND/power/named/bus done; junction taps onto existing wires still open) Then: a wire stub from a pin with a wire label; a wire onto an existing wire with a junction dot; a
+- [x] (terminals incl. GND/power/named/bus, junction taps onto existing wires) Then: a wire stub from a pin with a wire label; a wire onto an existing wire with a junction dot; a
       ground and a power terminal; a labelled terminal; a bus entry (wire from a pin to a bus with a label).
 - [~] (unannotated parts only; annotated parts need ROOT.CDB, refused) Change a component property (for example `PROGRAM`, `CLOCK`, the ROM image `FILE` of a 27C128) and a
       component value. Rename a terminal or wire label (lab7 asks for the `YA1` to `YA6` labels to be renamed).
@@ -193,7 +193,9 @@ the passing result in `docs/evidence/`.
 - [x] lab7 part 1: DAC output checked with the voltmeter on a slowed program (scope draws nothing here).
 - [ ] lab7 part 2: ADC reads the LDR, motor speed follows it; move the torch with sim_click.
 - [ ] Scope: find out why no trace (timebase 0.5 us/div? display/OpenGL setting?).
-- [ ] Junction taps (connect a pin to a wire that is already there); deleting single wires.
+- [x] Junction taps (`schematic_tap`, connect falls back to it), deleting single wires
+      (`schematic_delete_wire`), moving wired parts, maze router for all new wires (2026-11-16, checked in
+      Proteus with `scripts/smoke_junction.py`).
 - [ ] Layout: crowded terminals overlap (lab5 display pins are half a grid apart).
 - [ ] 2024 labs as extra cases; one circuit drawn from scratch.
 - [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in

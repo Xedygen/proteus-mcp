@@ -386,6 +386,11 @@ class Sheet:
                 last = id(o)
             else:
                 anchor.setdefault(o["start"], last)
+        total: dict[int, int] = {}
+        for o in self.objects:
+            for p in o.get("pointers", []):
+                if p:
+                    total[p] = total.get(p, 0) + 1
         counts, out, placed = {}, [], set()
         for o in self.objects:
             if o["type"] == "wire":
@@ -398,7 +403,7 @@ class Sheet:
                         out.append(wires[p])
                         placed.add(p)
             for k, a in anchor.items():
-                if a == id(o) and counts.get(k, 0) == 1 and k not in placed:
+                if a == id(o) and total.get(k, 0) == 1 and counts.get(k, 0) == 1 and k not in placed:
                     out.append(wires[k])
                     placed.add(k)
         if len(placed) != len(wires):
