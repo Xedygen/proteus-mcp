@@ -247,14 +247,25 @@ def firmware_build(project: str, source: str | None = None) -> dict:
         raise ValueError("this project is open in Proteus; call proteus_close first")
     files = pdsprj.entries(p)
     fp = pdsprj.firmware_paths(files)
+    created = False
     if not fp:
-        raise ValueError("project has no firmware project (FIRMWARE.XML)")
+        # e.g. the 2024 templates: an 8086 but no firmware project; create the standard one
+        if not any(c["device"].upper() in ("8086", "8088") for c in schematic.components(p, with_pins=False)):
+            raise ValueError("project has no firmware project and no 8086 to attach one to")
+        if source is None:
+            raise ValueError("project has no firmware project yet; pass `source` to create one")
+        pdsprj.replace(p, pdsprj.new_firmware_project("8086"))
+        files = pdsprj.entries(p)
+        fp = pdsprj.firmware_paths(files)
+        created = True
     text = source if source is not None else files[fp[0]].decode("cp437", errors="replace")
     res = firmware.build(text)
     out = res.as_dict()
     if res.ok:
         pdsprj.replace(p, {fp[0]: firmware.normalise_source(text), fp[1]: res.exe})
         out["stored"] = {"source": fp[0], "exe": fp[1], "load_bytes": _exe_load_size(res.exe)}
+        if created:
+            out["created_firmware_project"] = True
     return out
 
 

@@ -71,3 +71,45 @@ def referenced_files(project: str | Path) -> list[Path]:
         if f.is_file() and f.suffix.lower() not in (".pdsprj", ".pdf", ".workspace", ".sdf", ".source")                 and f.name.lower().encode() in blob_lower:
             out.append(f)
     return out
+
+
+_FIRMWARE_XML = """<?xml version='1.0' encoding='UTF-8' standalone='yes'?>
+<FIRMWARE FAMILY="8086" COMPILER="MASM32" TYPE="8086">
+ <PROJECTS>
+  <STRING>{name}</STRING>
+ </PROJECTS>
+</FIRMWARE>
+"""
+
+_CONFIG = """ <CONFIGURATION TARGET="{target}" COMPILER="MASM32" NAME="{target}">
+  <CONTROLLER FAMILY="8086" TYPE="8086"/>
+  <FILE TOOL="LD">
+   <FILE TOOL="ASM">
+    <FILE NAME="{name}/main.asm"/>
+   </FILE>
+  </FILE>
+  <OPTION DEFAULT="1" TOOL="LD" NAME="/CODEVIEW"/>
+  <OPTION DEFAULT="1" TOOL="ASM" NAME="/c"/>
+  <OPTION DEFAULT="1" TOOL="ASM" NAME="/Zd"/>
+  <OPTION DEFAULT="1" TOOL="ASM" NAME="/Zi"/>
+ </CONFIGURATION>
+"""
+
+_PROJECT_XML = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<PROJECT IID="5" BUILDPATH="{name}" VERSION="814" TYPE="SOURCE" NAME="{name}" CONFIGURATION="Debug">
+ <FILES ATTACH="1">
+  <FILE ATTACH="1" GROUP="Source Files" NAME="{name}/main.asm"/>
+  <FILE ATTACH="1" GROUP="Firmware Files" NAME="{name}/Debug/Debug.exe" FIRMWARE="1"/>
+ </FILES>
+{debug}{release}</PROJECT>
+"""
+
+
+def new_firmware_project(name: str = "8086") -> dict[str, bytes]:
+    """FIRMWARE.XML and FIRMWARE/<name>.XML for an 8086 MASM firmware project, as in the 2025 lab templates.
+    Some templates (2024) ship without one although their 8086 still points at .../8086/Debug/Debug.exe;
+    adding these entries plus main.asm and Debug.exe attaches the program again."""
+    project = _PROJECT_XML.format(name=name, debug=_CONFIG.format(target="Debug", name=name),
+                                  release=_CONFIG.format(target="Release", name=name))
+    return {"FIRMWARE.XML": _FIRMWARE_XML.format(name=name).encode(),
+            f"FIRMWARE/{name}.XML": project.encode()}

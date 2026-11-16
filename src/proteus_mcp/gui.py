@@ -257,6 +257,7 @@ class Session:
             if not self.alive():
                 raise GuiError(f"Proteus exited with code {self.proc.returncode}")
             self.handle_dialogs()
+            self._decline_crash_reports()
             mains = [h for h in _windows(self.pid) if win32gui.GetClassName(h).startswith("LX_APPLN")
                      and stem in win32gui.GetWindowText(h)]
             # The title ends with the active tab, which Proteus restores per project (Schematic Capture,
@@ -273,6 +274,32 @@ class Session:
                 quiet = 0
             time.sleep(0.5)
         raise GuiError(f"main window for {stem} did not appear in {timeout}s; windows={self.windows()}")
+
+    def _decline_crash_reports(self) -> None:
+        """After a Proteus crash, the next start asks (Qt window "Reports Uploading") whether to upload crash
+        reports to Labcenter, and blocks until answered.  Always answer No: nothing is sent anywhere."""
+        for h in _windows(self.pid):
+            if win32gui.GetWindowText(h) != "Reports Uploading" or win32gui.GetClassName(h) != "QWidget":
+                continue
+            l, t, r, b = win32gui.GetWindowRect(h)
+            # Qt draws its own buttons (no Win32 children); "No" sits at the bottom right of the 344x231 box
+            x, y = l + round((r - l) * 0.80), t + round((b - t) * 0.84)
+            if not BACKGROUND["on"]:
+                try:
+                    win32gui.SetForegroundWindow(h)
+                except Exception:
+                    pass
+                win32api.SetCursorPos((x, y))
+                time.sleep(0.2)
+                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                time.sleep(0.08)
+                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            else:
+                # Escape rejects a Qt dialog (= No) and needs no mouse
+                win32gui.PostMessage(h, win32con.WM_KEYDOWN, win32con.VK_ESCAPE, 0)
+                win32gui.PostMessage(h, win32con.WM_KEYUP, win32con.VK_ESCAPE, 0)
+            time.sleep(1.0)
+            self.warnings.append("declined Proteus's crash-report upload prompt (an earlier run crashed)")
 
     def hide(self) -> None:
         """Move the main window off-screen (to the right of all monitors) without activating it.  Its
@@ -494,7 +521,7 @@ class Session:
                     rows = _listview_rows(c)
                 except Exception:
                     continue
-                if any("netlist compiler" in r["message"].lower() for r in rows):
+                if any(k in r["message"].lower() for r in rows for k in ("netlist compiler", "failed to start", "can't load")):
                     return rows
         return []
 
