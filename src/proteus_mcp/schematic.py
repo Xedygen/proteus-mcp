@@ -183,7 +183,9 @@ def connect(project: str | Path, a: str, b: str, via_x_grid: float | None = None
         if pin["connected"]:
             raise dsn.DsnError(f"{label} already has a wire; Proteus allows one wire per pin end")
         if pin["bus"]:
-            raise dsn.DsnError(f"{label} is a bus pin; bus connections are not supported yet")
+            raise dsn.DsnError(f"{label} is a bus pin: give each bus pin a bus terminal with the same bus name "
+                               "(schematic_add_terminal, e.g. net='D[0..7]'), as the lab files do; single "
+                               "lines of that bus (D3) then join it by name")
         if pin["hidden"]:
             raise dsn.DsnError(f"{label} is a hidden power pin; Proteus connects it to its power net itself")
     key = sheet.new_key()
