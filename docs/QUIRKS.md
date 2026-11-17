@@ -24,8 +24,9 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
 - **POT (plain)** is static in simulation (always mid-scale). Use **POT-HG** (place it with
   `schematic_place_devices`), then hold its red buttons with `sim_click(dx_grid=-1.27, dy_grid=+-1.05,
   hold_seconds=...)`; roughly one step per 0.2 s.
-- **Digital Oscilloscope** draws no trace on this install, not even for the student's working lab7 solution
-  (checked with a real screen grab, not only PrintWindow). Check analog outputs with the template's DC
+- **Digital Oscilloscope**: the tools' screenshots of it were blank (old install, before 2026-11-15), but the
+  scope draws normally when used by hand on the current install (owner, 2026-11-17); retest pending in
+  TODO.md. Until then, check analog outputs with the template's DC
   voltmeters instead: they average a fast signal (lab7's 6 + 6 sin shows 5.99 V), so for evidence build a
   slowed-down copy of the program (about 0.7 s per sample) and sample the meter with screenshot_part.
 - **8255 log:** the simulation log shows only the power-on control word (`CTRLW SET TO 9B`), not the one your

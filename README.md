@@ -56,8 +56,8 @@ scenarios into terminal 1 prints `DEFNODEF` on terminal 2 (`docs/evidence/lab6_t
 
 `scripts/lab7_example.py` does lab7 part 1 (DAC0830 at 200H, 100 Hz 32-sample sine): renames the YA1..YA6
 placeholders, grounds the ADC pins the template leaves open, writes the program. Netlist checks pass and the
-simulation runs cleanly. The scope draws nothing on this install (not even for the student's solution), so
-the DAC was checked with the template's voltmeter and a slowed copy of the program: it follows the sine
+simulation runs cleanly. The tools' scope screenshots were blank at the time (see Limitations), so the DAC
+was checked with the template's voltmeter and a slowed copy of the program: it follows the sine
 between 0 and 12 V (`docs/evidence/lab7_dac_slow.png`); the 100 Hz rate comes from the cycle count.
 
 `scripts/lab8_example.py` does lab8 (8259 + ADC0804 + 8251) starting from the bare template: replaces the
@@ -85,9 +85,9 @@ netlist shows the intended nets; the file opens without a dialog).
 
 Verified on this machine (Proteus 8.6 SP2, build 23525) unless marked otherwise.
 
-- **Scope:** the Digital Oscilloscope draws no trace on this install, even for a plain clock generator, so
-  waveforms are checked with voltmeters or slowed programs. Whether it works on other installs is unverified
-  (TODO.md, Needs the owner).
+- **Scope:** the Digital Oscilloscope works in Proteus on this install (checked by hand 2026-11-17), but the
+  tools' own test of it has not been repeated since the reinstall, so waveforms are still checked with
+  voltmeters or slowed programs (TODO.md, Open work).
 - **Bus wires** are not drawn between pins. Buses are joined by named terminals (`AD0` joins the `AD[0..7]`
   line) and wire labels, which is how the templates do it.
 - **Annotated parts** (U1, R3, ...) keep their properties in ROOT.CDB, which only Proteus may write: offline

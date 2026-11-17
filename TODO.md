@@ -271,8 +271,14 @@ place-devices verification, generator identity clash.
 
 ## Needs the owner
 
-- [ ] **Digital Oscilloscope draws no trace on this install.** Not a circuit problem: a 1 kHz clock generator on
-      channel A of a fresh copy shows an empty screen in every ISIS graphics mode. Please open any design with
-      a scope by hand (e.g. Labcenter's own samples) and run it: if no trace shows there either, the install's
-      scope (or the display driver it uses) needs looking at; if it does, tell me what differs. Meanwhile the
-      tools check analog outputs with voltmeters (see QUIRKS.md).
+- [x] **Digital Oscilloscope.** The owner checked by hand on 2026-11-17: a hand-built 1 kHz DCLOCK on channel
+      A draws its square wave, and Labcenter's "Oscilloscopes (4)" 555 sample draws on the VSM Oscilloscope.
+      The install is fine; the earlier "no trace" came from the tools' test (probably run on the install
+      replaced on 2026-11-15, or captured while the popup was hidden). Moved to Open work below.
+
+## Open work (2026-11-17)
+
+- [ ] Repeat the scope test through the MCP on the current install (fresh project, 1 kHz generator to channel
+      A, net_of to confirm the wire, real screen grab with the popup on screen, background mode off). If it
+      draws, drop the voltmeter workaround from QUIRKS.md and the README; if not, compare with the owner's
+      hand-built design. Needs Proteus closed and the mouse left alone for about 2 minutes.
