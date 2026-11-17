@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 *.egg-info/
 dist/
+# MASM 5.10 is not redistributed; proteus-mcp finds the user's copy
+tools/masm/

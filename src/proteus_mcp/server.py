@@ -37,6 +37,8 @@ If Proteus shows a dialog the tools do not know, dialog_answer reads or answers 
 Schematic edits need Proteus closed on that project. Proteus runs visibly; sim_click, terminal_mode and
 schematic_place_devices move the real mouse, so the user should leave it alone while they run.
 
+MASM 5.10 is not shipped: if firmware_build says it is not found, ask the user for the folder with MASM.EXE and
+LINK.EXE and call masm_location(path=...).
 Read quirks() before writing 8086 code: the assembler is MASM 5.10 (no .IF/INVOKE/@@ labels, 128-char lines)
 and the Proteus models have quirks (8251: SHR AL,1 after IN; 8259 EOIs; ADC0804 first read; POT-HG).
 Every path argument may be absolute; projects are referred to afterwards by the name project_open returns.
@@ -141,6 +143,20 @@ def _cpu_ref(project: Path) -> str | None:
 def proteus_doctor() -> dict:
     """Check the environment: Proteus install and version, DOSBox, MASM, running Proteus processes."""
     return doctor.report()
+
+
+@mcp.tool()
+def masm_location(path: str | None = None) -> dict:
+    """Where MASM 5.10 (MASM.EXE + LINK.EXE) is.  It is not shipped with proteus-mcp: with no argument this
+    reports the folder in use, searching the disk if none is saved.  If it is not found, ask the user for the
+    folder (it comes with the course materials) and pass it as `path`; it is checked and remembered."""
+    if path:
+        d = paths.save_masm(path)
+        return {"masm_dir": str(d), "how": "saved", "config": str(paths.CONFIG_FILE)}
+    d, how = paths.find_masm()
+    return {"masm_dir": str(d) if d else None, "how": how,
+            **({} if d else {"next": "ask the user where MASM.EXE and LINK.EXE are, then call "
+                                     "masm_location(path=...)"})}
 
 
 @mcp.tool()
@@ -350,6 +366,7 @@ def firmware_build(project: str, source: str | None = None) -> dict:
 
     If `source` is given it replaces main.asm first. On errors nothing is stored and the errors are returned
     with line numbers. Proteus must not have this project open (close it first): it keeps its own copy.
+    If MASM is not found, ask the user where it is and call masm_location(path=...), then build again.
     """
     p = _project(project)
     if _session is not None and _session.alive() and _session.project.resolve() == p.resolve():

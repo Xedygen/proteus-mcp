@@ -106,17 +106,32 @@ Verified on this machine (Proteus 8.6 SP2, build 23525) unless marked otherwise.
 ## Install
 
 Requirements: Windows, Proteus 8.6 SP2, DOSBox 0.74-3 (for the assembler), and
-[uv](https://docs.astral.sh/uv/). MASM 5.10 and LINK ship inside the package.
+[uv](https://docs.astral.sh/uv/), and **MASM 5.10** (`MASM.EXE` and `LINK.EXE`, from the course materials).
+MASM is Microsoft software and is not shipped with proteus-mcp; see [Finding MASM](#finding-masm).
 
-The server runs straight from the folder with `uvx`; no venv to manage. Check the setup first:
+`uvx` runs the server straight from GitHub; no venv to manage. Check the setup first:
 
 ```powershell
-uvx --from D:\Projects\proteus-mcp proteus-mcp doctor
+uvx --from git+https://github.com/Xedygen/proteus-mcp proteus-mcp doctor
 ```
 
-Every line should say `True` except `labs_found` (see below). Once the project is on GitHub the same works
-with `--from git+https://github.com/<owner>/proteus-mcp`. After changing the code, add `--reinstall` once
-so uvx rebuilds its cached copy.
+Every line should say `True` except `labs_found` (see below). From a local checkout use
+`--from D:\path\to\proteus-mcp` instead; after changing the code, add `--reinstall` once so uvx rebuilds its
+cached copy.
+
+### Finding MASM
+
+The server looks for a folder holding both `MASM.EXE` and `LINK.EXE`, in this order:
+
+1. the `PROTEUS_MCP_MASM` environment variable;
+2. the location saved in `%LOCALAPPDATA%\proteus-mcp\config.json`;
+3. `tools\masm\` in a source checkout (ignored by git);
+4. a search of `C:\masm`, `C:\MASM510` and similar, then three folder levels below your home folder
+   (Desktop, Downloads, Documents, OneDrive) and each drive root. This takes well under a second, and the
+   folder it finds is saved, so the search runs once.
+
+If none of these finds it, `firmware_build` says so and Claude asks you where the folder is, then saves it with
+the `masm_location` tool. You can also tell Claude the folder at any time, or set `PROTEUS_MCP_MASM`.
 
 Where things live when installed:
 
@@ -124,6 +139,7 @@ Where things live when installed:
 | --- | --- | --- |
 | Proteus | `C:\Program Files (x86)\Labcenter Electronics\Proteus 8 Professional` | `PROTEUS_DIR` |
 | DOSBox | `C:\Program Files (x86)\DOSBox-0.74-3\DOSBox.exe` | `DOSBOX_EXE` |
+| MASM 5.10 | found as above | `PROTEUS_MCP_MASM` |
 | Workspace (project copies) | `%LOCALAPPDATA%\proteus-mcp\work` | `PROTEUS_MCP_WORK` |
 | Lab folders for `lab_list` | `%LOCALAPPDATA%\proteus-mcp\labs` | `PROTEUS_MCP_LABS` |
 
@@ -139,7 +155,7 @@ development aid, and the oscilloscope does not draw there.)
 Claude Code (add `--scope user` to have it in every project):
 
 ```powershell
-claude mcp add proteus -- uvx --from D:\Projects\proteus-mcp proteus-mcp
+claude mcp add proteus -- uvx --from git+https://github.com/Xedygen/proteus-mcp proteus-mcp
 ```
 
 Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`, then restart Claude Desktop:
@@ -149,8 +165,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`, then restart C
   "mcpServers": {
     "proteus": {
       "command": "uvx",
-      "args": ["--from", "D:\Projects\proteus-mcp", "proteus-mcp"],
-      "env": { "PROTEUS_MCP_LABS": "D:\Projects\proteus-mcp\labs" }
+      "args": ["--from", "git+https://github.com/Xedygen/proteus-mcp", "proteus-mcp"]
     }
   }
 }
@@ -164,6 +179,7 @@ If Claude Desktop cannot find `uvx`, use its full path (`where uvx`, usually
 | Tool | What it does |
 | --- | --- |
 | `proteus_doctor` | Install, versions, DOSBox and MASM, running Proteus processes |
+| `masm_location` | Where MASM 5.10 is; with a path, checks and remembers it |
 | `quirks` | Rules for code that builds and simulates here (MASM 5.10 limits, model quirks) |
 | `project_open`, `project_info`, `project_export` | Workspace copies, one folder per project under `work/projects/<name>/` (with the ROM images etc. it refers to); originals are never touched |
 | `firmware_get_source`, `firmware_build` | Read `main.asm`; assemble and link (optionally with new source), store EXE in the project; errors with line numbers |
@@ -215,6 +231,7 @@ The finished project is a normal `.pdsprj`; open it in Proteus to look at or pre
 | Path | Contents |
 | --- | --- |
 | `README.md` | This file |
+| `LICENSE` | MIT licence |
 | `TODO.md` | Work order by milestone, and things needed from the owner |
 | `docs/FORMAT.md` | What is known about the Proteus 8.6 project file format |
 | `docs/QUIRKS.md` | Proteus, model and MASM 5.10 quirks (also served by the `quirks` tool) |
@@ -223,7 +240,7 @@ The finished project is a normal `.pdsprj`; open it in Proteus to look at or pre
 | `tests/` | Tests that run without Proteus (`.venv\Scripts\python.exe -m pytest -q`) |
 | `scripts/` | Worked lab examples, smoke tests, lab download and sample extraction |
 | `e2e/` | Prompts and client config for the fresh-session acceptance runs |
-| `tools/masm/` | MASM 5.10 toolchain for 8086 firmware |
+| `tools/masm/` | Optional local MASM 5.10 copy for development (not in git) |
 | `labs/2024/`, `labs/2025/` | Lab material pulled from the YTU archive repo (not in git) |
 
 `labs/` is a copy of
@@ -262,7 +279,7 @@ Two things stand out across all of them:
 | Proteus | 8.6 SP2, build 8.6.23525, at `C:\Program Files (x86)\Labcenter Electronics\Proteus 8 Professional` |
 | 8086 model | Present (`MODELS\i8086.DLL`), plus the `VSM for 8086` demo board sample |
 | Device libraries | 162 `.LIB` files in `LIBRARY\` |
-| 8086 assembler | **MASM 5.10** (`MASM.EXE`, `LINK.EXE`, `debug.exe`) in `D:\Projects\2627G_BLM3061_MSAD\lab2` and `lab3` (same set in `C:\masm`). These are 16-bit DOS programs, so they run through DOSBox |
+| 8086 assembler | **MASM 5.10** (`MASM.EXE`, `LINK.EXE`, `debug.exe`), handed out with the course materials for labs 2 and 3. These are 16-bit DOS programs, so they run through DOSBox |
 | DOSBox | 0.74-3 at `C:\Program Files (x86)\DOSBox-0.74-3` |
 | Proteus's own Build button | Will not work: it expects MASM32 (`ml.exe` + `link16.exe`) in `C:\masm32` or `%PROGRAMFILES%\8086 Compilers Bundle`, and neither exists. The MCP builds outside Proteus instead |
 | Python / uv / Node | Python 3.10.11, `uv`, Node are installed |
@@ -308,3 +325,22 @@ Python MCP server over stdio (official `mcp` SDK, managed with `uv`), Windows on
 
 Results are checked against Proteus itself: its netlist for connectivity, its simulation log for the loaded
 program, and images or popup text for what the circuit does.
+
+## Licence
+
+proteus-mcp is released under the [MIT licence](LICENSE).
+
+It does not include or redistribute any third-party software or course material:
+
+- **Proteus** is commercial software by Labcenter Electronics. You need your own licensed copy; proteus-mcp
+  drives it the way a user would and does not modify or patch it.
+- **MASM 5.10 and LINK** are Microsoft software. They are not shipped; the server uses the copy you already
+  have (see [Finding MASM](#finding-masm)).
+- **DOSBox** is GPL software installed separately; proteus-mcp only starts it as an external program.
+- **Lab material** (`labs/`) is downloaded by `scripts/pull_labs.py` from a public archive repository for local
+  testing and is not part of this repository.
+- Python dependencies (mcp, pywinauto, pywin32, Pillow) are installed from PyPI under their own permissive
+  licences (MIT, BSD-3-Clause, PSF, MIT-CMU).
+
+Proteus and Labcenter are trademarks of Labcenter Electronics Ltd; MASM is a trademark of Microsoft
+Corporation. This project is not affiliated with or endorsed by either.

@@ -69,7 +69,7 @@ about the file format), this file.
       names, numbers and positions, terminals, wires with labels, junctions.
 - [x] (replaced by Proteus's own netlist, `netlist`/`net_of`) Netlist: group pins into nets from wire geometry, junctions, wire labels, terminal names and bus
       labels (`AD[0..15]` expands to `AD0` ... `AD15`). Cross-check against the lab solutions: the 8255 in
-      2025 lab5 `mert_guler` must show `PA0..PA7` going to the display and `PB0..PB7` to the buttons.
+      the 2025 lab5 student solution must show `PA0..PA7` going to the display and `PB0..PB7` to the buttons.
 - [x] Decide whether to parse `ROOT.CDB` for anything. (Read only: Proteus hangs on any rewritten CDB; annotated parts' values/properties come from it.) It lists pin names per part in plain text and may be
       an easier source for pin names than the DSN.
 
@@ -86,7 +86,7 @@ about the file format), this file.
       Oscilloscope, Memory Contents) as well.
 - [x] Read the simulation log / message window as text if it is reachable; otherwise screenshot it.
 - [x] **First end-to-end proof:** (firmware attach answered: replacing Debug.exe in the ZIP works, verified
-      by the load size in the log. The display check failed at first; fixed by the owner's Proteus reinstall, see QUIRKS.md.) open the 2025 lab5 solution (`labs/2025/lab5/mert_guler/tasarım.pdsprj`,
+      by the load size in the log. The display check failed at first; fixed by the owner's Proteus reinstall, see QUIRKS.md.) open the 2025 lab5 solution (the student solution under `labs/2025/lab5/`,
       copied to `work/`), rebuild its `main.asm` with the milestone 1 builder, attach the EXE, start the
       simulation, press a button, screenshot, and see the right digit on the 7-segment display.
       This also answers how firmware is attached in 8.6: test whether replacing
@@ -271,10 +271,12 @@ place-devices verification, generator identity clash.
 
 ## Needs the owner
 
-- [ ] **Publishing.** The repo has no remote. To install with `uvx --from git+https://...` from anywhere,
-      push it to GitHub (owner's account). Before making it public or uploading to PyPI, check whether
-      MASM 5.10 / LINK 3.60 (Microsoft, in `tools/masm`, shipped inside the wheel) may be redistributed;
-      if not, keep the repo private or make the assembler a separate download (`PROTEUS_MCP_MASM`).
+- [x] **Publishing.** (2026-11-17) Remote is https://github.com/Xedygen/proteus-mcp. MASM 5.10 / LINK
+      (Microsoft) are no longer in the repo or the wheel, and were removed from the git history before the
+      first push: the server finds the user's own copy (`paths.find_masm`) or asks for the folder
+      (`masm_location`). The code is MIT-licensed (`LICENSE`, copyright "Xedygen"); the
+      README's Licence section lists the third-party software it relies on but does not ship (Proteus,
+      MASM, DOSBox, lab material). Dependencies are all permissive (MIT, BSD-3, PSF, MIT-CMU).
 
 - [x] **Digital Oscilloscope.** The owner checked by hand on 2026-11-17: a hand-built 1 kHz DCLOCK on channel
       A draws its square wave, and Labcenter's "Oscillators (4)" 555 sample draws on the VSM Oscilloscope.
@@ -285,7 +287,7 @@ place-devices verification, generator identity clash.
 
 - [x] Repeat the scope test through the MCP on the current install. First attempt: Proteus said "Bad object
       record - circuit data lost": `Sheet.reschedule` moved a wire held once by a junction behind that
-      junction's other wires (only the 2025 lab7 mert_guler file has one); fixed, and a test now checks that
+      junction's other wires (only the 2025 lab7 student solution has one); fixed, and a test now checks that
       rescheduling reproduces every sample file. Second attempt: the scope's screen stayed empty because the
       solution saves channels A, C and D as OFF; with the owner switching A on, the 1 kHz wave drew. Third:
       `schematic_set_property` (CHAACDC=1, CHAVAL=2, HORIZVAL=0.5m) before launch, no GUI input; the wave

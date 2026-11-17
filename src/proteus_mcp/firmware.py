@@ -148,6 +148,7 @@ def build(source: str, *, debug_info: bool = False, timeout: float = 60.0, keep_
     """
     if not paths.DOSBOX_EXE.is_file():
         raise FileNotFoundError(f"DOSBox not found at {paths.DOSBOX_EXE}")
+    masm = paths.masm_dir()
     t0 = time.monotonic()
     tmp = (Path(keep_dir) if keep_dir else Path(tempfile.mkdtemp(prefix="pmcp_asm_"))).resolve()
     tmp.mkdir(parents=True, exist_ok=True)
@@ -155,7 +156,7 @@ def build(source: str, *, debug_info: bool = False, timeout: float = 60.0, keep_
         tmp = _ascii_dir(tmp, keep_dir is None)
     try:
         for exe in ("MASM.EXE", "LINK.EXE"):
-            shutil.copy2(paths.MASM_DIR / exe, tmp / exe)
+            shutil.copy2(masm / exe, tmp / exe)
         (tmp / "X.ASM").write_bytes(normalise_source(source))
         conf = CONF.format(dir=str(tmp), masm_opts="/Zi" if debug_info else "",
                            link_opts="/CO" if debug_info else "")

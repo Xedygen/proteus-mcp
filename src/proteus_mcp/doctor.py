@@ -7,7 +7,7 @@ from . import paths
 
 
 def report() -> dict:
-    masm = paths.MASM_DIR
+    masm, how = paths.find_masm()
     return {
         "python": sys.version.split()[0],
         "proteus_dir": str(paths.PROTEUS_DIR),
@@ -16,9 +16,9 @@ def report() -> dict:
         "pds_version": paths.file_version(paths.PDS_EXE),
         "dosbox_exe": str(paths.DOSBOX_EXE),
         "dosbox_found": paths.DOSBOX_EXE.is_file(),
-        "masm_dir": str(masm),
-        "masm_found": (masm / "MASM.EXE").is_file(),
-        "link_found": (masm / "LINK.EXE").is_file(),
+        "masm_dir": str(masm) if masm else None,
+        "masm_found": masm is not None,
+        "masm_how": how,
         "work_dir": str(paths.WORK_DIR),
         "labs_dir": str(paths.LABS_DIR),
         "labs_found": paths.LABS_DIR.is_dir(),
@@ -41,5 +41,5 @@ def main() -> int:
     width = max(map(len, r))
     for k, v in r.items():
         print(f"{k:<{width}}  {v}")
-    ok = r["pds_exe_found"] and r["dosbox_found"] and r["masm_found"] and r["link_found"] and r["quirks_found"]
+    ok = r["pds_exe_found"] and r["dosbox_found"] and r["masm_found"] and r["quirks_found"]
     return 0 if ok else 1
