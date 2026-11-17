@@ -272,7 +272,7 @@ place-devices verification, generator identity clash.
 ## Needs the owner
 
 - [x] **Digital Oscilloscope.** The owner checked by hand on 2026-11-17: a hand-built 1 kHz DCLOCK on channel
-      A draws its square wave, and Labcenter's "Oscilloscopes (4)" 555 sample draws on the VSM Oscilloscope.
+      A draws its square wave, and Labcenter's "Oscillators (4)" 555 sample draws on the VSM Oscilloscope.
       The install is fine; the earlier "no trace" came from the tools' test (probably run on the install
       replaced on 2026-11-15, or captured while the popup was hidden). Moved to Open work below.
 
