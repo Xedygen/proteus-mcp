@@ -89,14 +89,13 @@ Verified on this machine (Proteus 8.6 SP2, build 23525) unless marked otherwise.
   of the 2025 lab7 solution draws its square wave and `screenshot(window="Oscilloscope")` captures it
   (`docs/evidence/scope_1khz.png`). The scope's settings are part properties (`CHAACDC`, `CHAVAL`,
   `HORIZVAL` ...) set with `schematic_set_property` while Proteus is closed; a saved design may have its
-  channels switched off. The trace only draws while the popup is on screen (background mode off).
+  channels switched off.
 - **Bus wires** are not drawn between pins. Buses are joined by named terminals (`AD0` joins the `AD[0..7]`
   line) and wire labels, which is how the templates do it.
 - **Annotated parts** (U1, R3, ...) keep their properties in ROOT.CDB, which only Proteus may write: offline
   edits are refused, and `proteus_edit_component(save=True)` changes them through Proteus instead.
-- **New device types** are placed through the Pick Devices dialog with the real mouse. In background mode
-  that tool refuses to run, as do button presses, the pot and terminal hex mode: call
-  `proteus_background(false)` first.
+- **New device types** are placed through the Pick Devices dialog with the real mouse; button presses, the
+  pot and terminal hex mode use it too. The user should not move the mouse while these run.
 - **Firmware:** 8086 programs only (MASM 5.10 in DOSBox). PIC/AVR HEX firmware is not handled (unverified,
   no lab needs it).
 - **Generators** are left out of Proteus's netlist (Proteus's behaviour); `net_of` adds them from the sheet.
@@ -106,39 +105,59 @@ Verified on this machine (Proteus 8.6 SP2, build 23525) unless marked otherwise.
 
 ## Install
 
-Requirements: Windows, Proteus 8.6 SP2, DOSBox 0.74-3, Python 3.10+, `uv`.
+Requirements: Windows, Proteus 8.6 SP2, DOSBox 0.74-3 (for the assembler), and
+[uv](https://docs.astral.sh/uv/). MASM 5.10 and LINK ship inside the package.
+
+The server runs straight from the folder with `uvx`; no venv to manage. Check the setup first:
 
 ```powershell
-cd D:\Projects\proteus-mcp
-uv venv .venv
-uv pip install -e . --python .venv\Scripts\python.exe
-.venv\Scripts\python.exe -m proteus_mcp doctor
+uvx --from D:\Projects\proteus-mcp proteus-mcp doctor
 ```
 
-Paths can be overridden with `PROTEUS_DIR`, `DOSBOX_EXE`, `PROTEUS_MCP_MASM` and `PROTEUS_MCP_WORK`.
-`PROTEUS_MCP_BACKGROUND=0` starts with background mode off (the `proteus_background` tool switches it at run
-time; MCP clients pass only a few environment variables, so set it in the client config's `env` block).
+Every line should say `True` except `labs_found` (see below). Once the project is on GitHub the same works
+with `--from git+https://github.com/<owner>/proteus-mcp`. After changing the code, add `--reinstall` once
+so uvx rebuilds its cached copy.
+
+Where things live when installed:
+
+| What | Default | Override |
+| --- | --- | --- |
+| Proteus | `C:\Program Files (x86)\Labcenter Electronics\Proteus 8 Professional` | `PROTEUS_DIR` |
+| DOSBox | `C:\Program Files (x86)\DOSBox-0.74-3\DOSBox.exe` | `DOSBOX_EXE` |
+| Workspace (project copies) | `%LOCALAPPDATA%\proteus-mcp\work` | `PROTEUS_MCP_WORK` |
+| Lab folders for `lab_list` | `%LOCALAPPDATA%\proteus-mcp\labs` | `PROTEUS_MCP_LABS` |
+
+Run from a source checkout (`python -m proteus_mcp`), the workspace and labs are `work\` and `labs\` in the
+repo instead. `lab_list` is a convenience; `project_open` takes any `.pdsprj` path.
+
+Proteus runs visibly on the desktop. `sim_click`, `terminal_mode` and `schematic_place_devices` move the
+real mouse, so leave it alone while they run. (`PROTEUS_MCP_BACKGROUND=1` hides Proteus off-screen; it was a
+development aid, and the oscilloscope does not draw there.)
 
 ## Connect a client
 
-Claude Code:
+Claude Code (add `--scope user` to have it in every project):
 
 ```powershell
-claude mcp add proteus -- D:\Projects\proteus-mcp\.venv\Scripts\python.exe -X utf8 -m proteus_mcp serve
+claude mcp add proteus -- uvx --from D:\Projects\proteus-mcp proteus-mcp
 ```
 
-Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
+Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`, then restart Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "proteus": {
-      "command": "D:\\Projects\\proteus-mcp\\.venv\\Scripts\\python.exe",
-      "args": ["-X", "utf8", "-m", "proteus_mcp", "serve"]
+      "command": "uvx",
+      "args": ["--from", "D:\Projects\proteus-mcp", "proteus-mcp"],
+      "env": { "PROTEUS_MCP_LABS": "D:\Projects\proteus-mcp\labs" }
     }
   }
 }
 ```
+
+If Claude Desktop cannot find `uvx`, use its full path (`where uvx`, usually
+`C:\Users\<you>\.local\bin\uvx.exe`). The first start downloads the dependencies and takes a few seconds.
 
 ## Tools
 
@@ -157,7 +176,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 | `terminal_type`, `terminal_screenshot` | Type into Virtual Terminals during a run; capture what they show |
 | `library_search` | Offline search of the installed device libraries (about 55,000 devices: name, library, category, description), e.g. "4-to-16 decoder" |
 | `schematic_place_devices` | Place new device types from the Proteus libraries (GUI, then saved by Proteus); unknown names, spots outside the sheet border or on an existing part or wire are refused before Proteus starts |
-| `proteus_background` | Background mode (default): Proteus runs off-screen without taking focus; mouse-based tools pause |
+| `proteus_background` | Development aid, off by default: hides Proteus off-screen (mouse-based tools then refuse) |
 | `netlist`, `net_of` | Proteus's own connectivity (Netlist Compiler, logical mode) |
 | `schematic_components` | Parts, values, properties, pins with grid positions and connection state (unannotated parts as `RES#0010`, the netlist's names) |
 | `schematic_connect` | Orthogonal wire between two unconnected pins, e.g. `U2.Q1` to `U3.A0`; if one of them is already wired it taps that net instead |
@@ -182,9 +201,7 @@ Claude Desktop, in `%APPDATA%\Claude\claude_desktop_config.json`:
 1. Connect the server to Claude Code or Claude Desktop (above) and restart the client; `/mcp` in Claude Code
    or the tools icon in Desktop should list `proteus`.
 2. Leave Proteus closed; the server starts its own instance. Mouse-based steps (placing new device types,
-   pressing buttons, the pot, terminal hex mode) move the real mouse, so either allow that
-   ("you may use the mouse", the model then calls `proteus_background(false)`) or keep the default background
-   mode and accept that those steps are skipped.
+   pressing buttons, the pot, terminal hex mode) move the real mouse; leave it alone while they run.
 3. Attach the lab's `tanım.pdf` to the chat (Desktop: drag it in; Claude Code: give its path) and ask, e.g.:
 
    *"Use the proteus tools to do this lab. Find its template with lab_list, read quirks() first, wire what
@@ -284,7 +301,7 @@ Python MCP server over stdio (official `mcp` SDK, managed with `uv`), Windows on
    copies, generators) and `netlist.py` reads Proteus's own netlist. Templates are never written.
 2. **Firmware.** The 8086 source is assembled with the course's MASM 5.10 in headless DOSBox and the DOS EXE
    is stored where the project's firmware entry expects it.
-3. **Proteus GUI.** `gui.py` starts its own Proteus instance (background mode keeps it off-screen) and drives
+3. **Proteus GUI.** `gui.py` starts its own Proteus instance and drives
    it through menu commands and dialogs: simulation control, logs, Export Bitmap sheet images, Debug popups
    read as text, Edit Component, Pick Devices, button presses and terminal typing. Unknown dialogs are
    reported, never clicked through.

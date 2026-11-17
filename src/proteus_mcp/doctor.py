@@ -20,6 +20,9 @@ def report() -> dict:
         "masm_found": (masm / "MASM.EXE").is_file(),
         "link_found": (masm / "LINK.EXE").is_file(),
         "work_dir": str(paths.WORK_DIR),
+        "labs_dir": str(paths.LABS_DIR),
+        "labs_found": paths.LABS_DIR.is_dir(),
+        "quirks_found": paths.QUIRKS_MD.is_file(),
         "proteus_running_pids": running_proteus(),
     }
 
@@ -38,5 +41,5 @@ def main() -> int:
     width = max(map(len, r))
     for k, v in r.items():
         print(f"{k:<{width}}  {v}")
-    ok = r["pds_exe_found"] and r["dosbox_found"] and r["masm_found"] and r["link_found"]
+    ok = r["pds_exe_found"] and r["dosbox_found"] and r["masm_found"] and r["link_found"] and r["quirks_found"]
     return 0 if ok else 1

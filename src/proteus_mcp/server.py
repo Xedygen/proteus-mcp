@@ -34,15 +34,20 @@ sim_log, screenshot, screenshot_part, sheet_image, terminal_screenshot, terminal
 debug_memory -> sim_stop -> proteus_close -> project_export to hand the result over.
 Annotated parts (U1 ...) are edited live: proteus_launch -> proteus_edit_component(ref, {...}, save=True).
 If Proteus shows a dialog the tools do not know, dialog_answer reads or answers it.
-Schematic edits need Proteus closed on that project. Mouse-based tools (sim_click, terminal_mode,
-schematic_place_devices) need proteus_background(false).
+Schematic edits need Proteus closed on that project. Proteus runs visibly; sim_click, terminal_mode and
+schematic_place_devices move the real mouse, so the user should leave it alone while they run.
 
 Read quirks() before writing 8086 code: the assembler is MASM 5.10 (no .IF/INVOKE/@@ labels, 128-char lines)
 and the Proteus models have quirks (8251: SHR AL,1 after IN; 8259 EOIs; ADC0804 first read; POT-HG).
 Every path argument may be absolute; projects are referred to afterwards by the name project_open returns.
 """
 
-mcp = MCPServer("proteus", instructions=INSTRUCTIONS)
+try:
+    from importlib.metadata import version as _version
+    _VERSION = _version("proteus-mcp")
+except Exception:
+    _VERSION = ""
+mcp = MCPServer("proteus", instructions=INSTRUCTIONS, version=_VERSION)
 _session: gui.Session | None = None
 _register = mcp.tool
 
@@ -140,8 +145,8 @@ def proteus_doctor() -> dict:
 
 @mcp.tool()
 def proteus_background(on: bool | None = None) -> dict:
-    """Background mode (default on): Proteus starts without focus and stays off-screen, so the user can keep
-    working. Simulation, logs, netlists, screenshots and file edits work; sim_click and
+    """Background mode (default off; PROTEUS_MCP_BACKGROUND=1 turns it on): Proteus starts without focus and
+    stays off-screen. The oscilloscope does not draw there. Simulation, logs, netlists, screenshots and file edits work; sim_click and
     schematic_place_devices need it off (they move the real mouse). Pass on=false/true to change it, or
     nothing to read it. Applies to the next proteus_launch (and immediately to clicks)."""
     if on is not None:
@@ -166,8 +171,12 @@ def lab_list(filter: str = "") -> list[dict]:
     """Lab folders under labs/ that have an assignment PDF (tanım.pdf) or a template (taslak.pdsprj or
     proteus_sablon.pdsprj), with absolute paths: open the template with project_open. `filter` matches the
     folder path, e.g. "2025/lab8". A lab without a template starts from scratch or from a reference.
-    Other .pdsprj files in a folder (student solutions) are listed as references, not as starting points."""
-    labs = paths.REPO / "labs"
+    Other .pdsprj files in a folder (student solutions) are listed as references, not as starting points.
+    The labs folder is PROTEUS_MCP_LABS (default: labs/ in a source checkout, %LOCALAPPDATA%\proteus-mcp\labs
+    when installed); empty when it does not exist. Any .pdsprj path also works with project_open directly."""
+    labs = paths.LABS_DIR
+    if not labs.is_dir():
+        return []
     out = []
     for d in sorted({p.parent for p in labs.glob("**/*") if p.suffix.lower() in (".pdf", ".pdsprj")}):
         rel = d.relative_to(labs).as_posix()

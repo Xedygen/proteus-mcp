@@ -36,8 +36,9 @@ user32 = ctypes.windll.user32
 import os as _os
 # Background mode: Proteus starts without activation and is moved off-screen, so it never covers the owner's
 # screen.  Everything driven by window messages and window rendering keeps working; real mouse clicks
-# (pressing parts, placing library devices) are refused.  PROTEUS_MCP_BACKGROUND=0 turns it off.
-BACKGROUND = {"on": _os.environ.get("PROTEUS_MCP_BACKGROUND", "1") != "0"}
+# (pressing parts, placing library devices) are refused.  Off by default; PROTEUS_MCP_BACKGROUND=1 turns it
+# on (used while developing).
+BACKGROUND = {"on": _os.environ.get("PROTEUS_MCP_BACKGROUND", "0") == "1"}
 
 # Dialog texts that are answered automatically: (title, regex on the message text, button to press).
 KNOWN_DIALOGS = [

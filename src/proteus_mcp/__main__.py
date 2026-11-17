@@ -1,8 +1,13 @@
-"""python -m proteus_mcp [doctor|serve|build <file.asm>]"""
+"""proteus-mcp [serve|doctor|build <file.asm>]   (serve, the MCP stdio server, is the default)"""
+import subprocess
 import sys
 
 
 def main() -> int:
+    # Paths here contain Turkish letters (tasarım.pdsprj); run in UTF-8 mode however we were started (uvx,
+    # a console script, python -m).  The child inherits stdin/stdout, so the MCP stdio link is unaffected.
+    if not sys.flags.utf8_mode:
+        return subprocess.call([sys.executable, "-X", "utf8", "-m", "proteus_mcp", *sys.argv[1:]])
     cmd = sys.argv[1] if len(sys.argv) > 1 else "serve"
     if cmd == "doctor":
         from .doctor import main as doctor

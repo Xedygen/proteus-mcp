@@ -271,6 +271,11 @@ place-devices verification, generator identity clash.
 
 ## Needs the owner
 
+- [ ] **Publishing.** The repo has no remote. To install with `uvx --from git+https://...` from anywhere,
+      push it to GitHub (owner's account). Before making it public or uploading to PyPI, check whether
+      MASM 5.10 / LINK 3.60 (Microsoft, in `tools/masm`, shipped inside the wheel) may be redistributed;
+      if not, keep the repo private or make the assembler a separate download (`PROTEUS_MCP_MASM`).
+
 - [x] **Digital Oscilloscope.** The owner checked by hand on 2026-11-17: a hand-built 1 kHz DCLOCK on channel
       A draws its square wave, and Labcenter's "Oscillators (4)" 555 sample draws on the VSM Oscilloscope.
       The install is fine; the earlier "no trace" came from the tools' test (probably run on the install
@@ -286,33 +291,33 @@ place-devices verification, generator identity clash.
       `schematic_set_property` (CHAACDC=1, CHAVAL=2, HORIZVAL=0.5m) before launch, no GUI input; the wave
       draws and screenshot() captures it (`docs/evidence/scope_1khz.png`). QUIRKS.md and README updated.
 
-## Milestone 8: work without interrupting the user, v1.0, then beyond the labs (owner, 2026-11-17)
+## Milestone 8: v1.0 release, then beyond the labs (owner, 2026-11-17)
 
-Goal: the MCP must run while the owner keeps using the PC. No real mouse, no keyboard focus changes,
-no windows popping up in front. Background mode becomes the only mode.
+Owner's decision (2026-11-17): background mode was a development aid; v1 runs Proteus visibly, and tools that
+move the real mouse are fine in normal mode. v1 means: installable with `uvx` and connected to Claude like
+any other MCP server.
 
-### 8a: no mouse, no focus stealing
+### 8a: package as an installable MCP server
 
-- [ ] `sim_click` (buttons, switches, POT-HG): drive actuators without the real mouse (window messages to the
-      canvas, Proteus's own actuator commands, or a design edit such as LOGICSTATE properties). Check that
-      Proteus reacts to the posted messages while hidden.
-- [ ] `schematic_place_devices`: place parts without the mouse (Pick Devices dialog + posted canvas clicks,
-      or write the part record and its library entry into ROOT.DSN directly).
-- [ ] `terminal_mode`: set the Virtual Terminal's menu items through messages / the menu handle, not a
-      right click.
-- [ ] Crash-report prompt ("Reports Uploading"): always answer with the posted Escape key, never the mouse.
-- [ ] No `SetForegroundWindow`, `HWND_TOPMOST` or focus changes anywhere; popups (scope, terminal, debug
-      windows) captured off-screen. The scope does not draw while hidden (QUIRKS.md); find a way (render
-      to an off-screen but "visible" position, PrintWindow, or read the trace data) or document it.
-- [ ] Remove `proteus_background(false)` once nothing needs it; tests that grep `gui.py` for
-      `SetCursorPos` / `mouse_event` and fail if any remain.
-- [ ] Rerun the lab acceptance (2025 lab 5 to 8, 2024 lab 5 and 8) in background mode while the PC is in
-      use, and record it.
+- [x] Wheel carries MASM/LINK and QUIRKS.md (hatch force-include); paths fall back to the package when not
+      run from the repo; workspace in `%LOCALAPPDATA%\proteus-mcp\work`, labs from `PROTEUS_MCP_LABS`.
+- [x] `proteus-mcp` console script = `serve` (default) / `doctor` / `build`, relaunching itself in UTF-8 mode.
+- [x] Background mode off by default (`PROTEUS_MCP_BACKGROUND=1` turns it on); docs no longer ask for it.
+- [x] `mcp>=2.3,<3` (the code uses the 2.x `MCPServer` API); server reports its version.
+- [x] Verified 2026-11-17 through `uvx --from D:\Projects\proteus-mcp proteus-mcp`, started from another
+      folder: doctor all found; MCP client lists 47 tools, quirks, project_open on a non-ASCII path,
+      firmware_build, schematic_check; live run: generator + scope properties, launch, sim, scope screenshot
+      draws the 1 kHz wave, close.
+- [x] README Install / Connect a client rewritten for uvx (Claude Code and Claude Desktop).
 
 ### 8b: v1.0
 
-- [ ] When 8a is done and the acceptance passes: update README/QUIRKS, bump the version to 1.0.0 in
-      pyproject, commit, and tag `v1.0.0` (local tag; the owner pushes).
+- [x] Version 1.0.0, local tag `v1.0.0` (2026-11-17).
+
+### Later (optional): no mouse at all
+
+- [ ] `sim_click`, `schematic_place_devices`, `terminal_mode` and the crash-report prompt without the real
+      mouse, so the MCP never interrupts the user. Not needed for v1 (owner, 2026-11-17).
 
 ### 8c: beyond the lab files (after v1.0)
 
