@@ -214,7 +214,7 @@ the passing result in `docs/evidence/`.
       2026-11-16).
 - [x] 2024 labs as extra cases (one circuit drawn from scratch: done, scripts/scratch_example.py; 2024 lab 5
       and lab 8 done by fresh sessions, see below).
-- [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
+- [x] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
       work/e2e/prompt_*.txt):
       - [x] lab5 (2026-11-16): all 8 keys show their digit; 41 turns after a restart. It found 4 tool problems,
             all fixed (first sim_click lost, docked debug panels, clash message, 8255 log note).
