@@ -223,7 +223,7 @@ Proteus-based assignments (these are what the MCP must handle):
 | 2025 lab7 | DAC0830 / ADC0804 | 8086, latches, 74154, DAC0830, op-amp, scope (plus ADC, LDR, motors for part 2) | 100 Hz, 32-step sine on the scope; or motor speed follows the LDR |
 | 2025 lab8 | 8259 + ADC0804 + 8251 | 8086, 3x 74273, 74154, 8251A, 8259, ADC0804, pot, virtual terminal | Five ADC samples printed as hex bytes, interrupt driven (vectors 51H, 52H) |
 | 2025 odev2 | Memory map and address decoding | 8086, 3x 74273, 2x 74LS138, 4x 27C128, 2x 62256 | ROM at 20000H, RAM at 60000H, RAM00/RAM01 show the bytes written by the ROM routines |
-| 2024 lab 5 to 8 | Same family of topics | Templates and solutions included | Useful as extra test cases |
+| 2024 lab 5 to 8 | Same family of topics | Templates and solutions included | Extra test cases; lab 5 (8255 password, 7-segment) and lab 8 (DAC waveforms) done by fresh sessions |
 
 Labs 1 to 4 and odev1 (both years) ship only `.asm` / `.cpp` files and no Proteus project. They are plain
 assembly exercises with no circuit, so they are out of scope (decided in [TODO.md](TODO.md));

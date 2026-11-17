@@ -182,7 +182,7 @@ the passing result in `docs/evidence/`.
 - [x] `docs/QUIRKS.md`: model quirks and MASM 5.10 restrictions that Claude must know when writing lab code.
 - [x] (tests/test_dsn.py, 60 tests) Tests that run without Proteus (parser round-trip, netlist on the samples when `labs/` is present,
       firmware build) under `tests/`.
-- [ ] Final commit.
+- [x] Final commit (2026-11-17).
 
 ## Open work (2026-11-15)
 
@@ -212,7 +212,8 @@ the passing result in `docs/evidence/`.
       neighbour's lead, then distance; a clash it cannot avoid comes back as a `note`. Checked in Proteus at
       200-300 DPI with the new `sheet_image` (lab5_example: display row, resistor row, pull-ups all clear,
       2026-11-16).
-- [ ] 2024 labs as extra cases (one circuit drawn from scratch: done, scripts/scratch_example.py).
+- [x] 2024 labs as extra cases (one circuit drawn from scratch: done, scripts/scratch_example.py; 2024 lab 5
+      and lab 8 done by fresh sessions, see below).
 - [~] Fresh-session acceptance (headless claude -p, Opus 5.5, only the proteus tools + Read, prompts in
       work/e2e/prompt_*.txt):
       - [x] lab5 (2026-11-16): all 8 keys show their digit; 41 turns after a restart. It found 4 tool problems,
@@ -228,13 +229,17 @@ the passing result in `docs/evidence/`.
             copies no longer take the package name (U4 vs U4:A), schematic_add_terminals (batch).
       - [x] Minimal prompt ("do the lab in this PDF" + save path), lab7 (2026-11-16): picked Application 2
             (LDR -> ADC -> DAC -> motors), motor voltage follows the torch 0 -> 11.9 V; 50 turns, 0 tool errors.
-      - [~] 2024 lab 5 (minimal prompt, 2026-11-17): 96 turns, about 5.6 USD, 12 min, 0 tool errors; wired the
+      - [x] 2024 lab 5 (minimal prompt, 2026-11-17): 96 turns, about 5.6 USD, 12 min, 0 tool errors; wired the
             whole circuit (Proteus netlist confirmed) but could not simulate: the template's 8086.XML lists no
             files, so Proteus ignored the built EXE. Fixed: firmware_build registers main.asm/Debug.exe there
             (checked live: "Program Loaded"). Rerun (2026-11-17), stopped by the owner before it saved: it
             simulated the password check ("8" lights after the right switches, reset clears it, a wrong switch
             keeps it dark, confirmed in the 8086 registers). One sim_click was lost (the owner moved the mouse
             during the run, or the first-click-focus problem is back); repeat the run without mouse use.
+            Third run, no mouse use (2026-11-17): 123 turns, about 3.2 USD, 11 min, 16 sim_clicks with none
+            lost, so the earlier lost click was the mouse. Saved file opened fresh loads its program; A5H shows
+            "8", 25H dark, reset on release blanks it. Only tool errors were input checks with clear messages
+            (placement outside the sheet border, sheet_image before launch, source before a build).
       - [x] 2024 lab 8 (minimal prompt; template without a firmware project): DAC square 19.997 Hz and sawtooth
             39.86 Hz measured in simulation. Fixed from it: lab_list finds proteus_sablon templates, programs
             for such templates are attached at launch, crash-report prompt declined, top-level log popup.
