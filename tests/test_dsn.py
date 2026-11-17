@@ -26,6 +26,18 @@ def test_round_trip(path):
 
 @pytest.mark.skipif(not SAMPLES, reason="labs/ not present")
 @pytest.mark.parametrize("path", SAMPLES, ids=lambda p: p.parent.name + "/" + p.stem)
+def test_reschedule_keeps_isis_order(path):
+    """Every edit reschedules the wires; on an unchanged sheet that must reproduce the file.  (2025 lab7
+    mert_guler has a wire held once by a junction, in its first pointer slot; Proteus reported "Bad object
+    record" when it moved behind the junction's other wires.)"""
+    data = _dsn(path)
+    sheet = dsn.parse(data)
+    sheet.reschedule()
+    assert sheet.build() == data
+
+
+@pytest.mark.skipif(not SAMPLES, reason="labs/ not present")
+@pytest.mark.parametrize("path", SAMPLES, ids=lambda p: p.parent.name + "/" + p.stem)
 def test_resize_relocates(path):
     """Grow one wire by a point: every later pointer and the sheet directory must follow."""
     data = _dsn(path)

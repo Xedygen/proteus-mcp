@@ -399,7 +399,9 @@ class Sheet:
             for p in o.get("pointers", []):
                 if p:
                     counts[p] = counts.get(p, 0) + 1
-                    if counts[p] == 2:
+                    # a wire held only by this object, which it already followed, keeps its pointer slot
+                    single = total[p] == 1 and anchor.get(p) == id(o)
+                    if (counts[p] == 2 or single) and p not in placed:
                         out.append(wires[p])
                         placed.add(p)
             for k, a in anchor.items():
