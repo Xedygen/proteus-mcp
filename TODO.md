@@ -278,7 +278,55 @@ place-devices verification, generator identity clash.
 
 ## Open work (2026-11-17)
 
-- [ ] Repeat the scope test through the MCP on the current install (fresh project, 1 kHz generator to channel
-      A, net_of to confirm the wire, real screen grab with the popup on screen, background mode off). If it
-      draws, drop the voltmeter workaround from QUIRKS.md and the README; if not, compare with the owner's
-      hand-built design. Needs Proteus closed and the mouse left alone for about 2 minutes.
+- [x] Repeat the scope test through the MCP on the current install. First attempt: Proteus said "Bad object
+      record - circuit data lost": `Sheet.reschedule` moved a wire held once by a junction behind that
+      junction's other wires (only the 2025 lab7 mert_guler file has one); fixed, and a test now checks that
+      rescheduling reproduces every sample file. Second attempt: the scope's screen stayed empty because the
+      solution saves channels A, C and D as OFF; with the owner switching A on, the 1 kHz wave drew. Third:
+      `schematic_set_property` (CHAACDC=1, CHAVAL=2, HORIZVAL=0.5m) before launch, no GUI input; the wave
+      draws and screenshot() captures it (`docs/evidence/scope_1khz.png`). QUIRKS.md and README updated.
+
+## Milestone 8: work without interrupting the user, v1.0, then beyond the labs (owner, 2026-11-17)
+
+Goal: the MCP must run while the owner keeps using the PC. No real mouse, no keyboard focus changes,
+no windows popping up in front. Background mode becomes the only mode.
+
+### 8a: no mouse, no focus stealing
+
+- [ ] `sim_click` (buttons, switches, POT-HG): drive actuators without the real mouse (window messages to the
+      canvas, Proteus's own actuator commands, or a design edit such as LOGICSTATE properties). Check that
+      Proteus reacts to the posted messages while hidden.
+- [ ] `schematic_place_devices`: place parts without the mouse (Pick Devices dialog + posted canvas clicks,
+      or write the part record and its library entry into ROOT.DSN directly).
+- [ ] `terminal_mode`: set the Virtual Terminal's menu items through messages / the menu handle, not a
+      right click.
+- [ ] Crash-report prompt ("Reports Uploading"): always answer with the posted Escape key, never the mouse.
+- [ ] No `SetForegroundWindow`, `HWND_TOPMOST` or focus changes anywhere; popups (scope, terminal, debug
+      windows) captured off-screen. The scope does not draw while hidden (QUIRKS.md); find a way (render
+      to an off-screen but "visible" position, PrintWindow, or read the trace data) or document it.
+- [ ] Remove `proteus_background(false)` once nothing needs it; tests that grep `gui.py` for
+      `SetCursorPos` / `mouse_event` and fail if any remain.
+- [ ] Rerun the lab acceptance (2025 lab 5 to 8, 2024 lab 5 and 8) in background mode while the PC is in
+      use, and record it.
+
+### 8b: v1.0
+
+- [ ] When 8a is done and the acceptance passes: update README/QUIRKS, bump the version to 1.0.0 in
+      pyproject, commit, and tag `v1.0.0` (local tag; the owner pushes).
+
+### 8c: beyond the lab files (after v1.0)
+
+Proteus features the labs never used; pick and order with the owner. Candidates:
+
+- [ ] Other microcontrollers' firmware (8051, AVR/Arduino, PIC): build through Proteus's own VSM Studio
+      compilers or external toolchains, attach HEX/ELF files.
+- [ ] Analysis graphs (analogue, digital, mixed, frequency, transient): place a graph, add probes, run
+      the simulation, read back the result.
+- [ ] More instruments: logic analyser, counter/timer, signal generator, I2C/SPI debuggers, AC/DC meters,
+      read their values or pictures.
+- [ ] Full schematic editing: any library part (search the libraries), delete/move parts and wires, buses,
+      multi-sheet and hierarchical designs, net labels, power rails.
+- [ ] Bill of materials, design rule check, netlist export in other formats.
+- [ ] PCB layout (ARES): read a layout, place/route, Gerber export, if the licence includes it.
+- [ ] New projects from scratch (New Project wizard) instead of starting from a lab template.
+- [ ] Labcenter's sample projects as a regression set beyond the lab files.

@@ -56,9 +56,9 @@ scenarios into terminal 1 prints `DEFNODEF` on terminal 2 (`docs/evidence/lab6_t
 
 `scripts/lab7_example.py` does lab7 part 1 (DAC0830 at 200H, 100 Hz 32-sample sine): renames the YA1..YA6
 placeholders, grounds the ADC pins the template leaves open, writes the program. Netlist checks pass and the
-simulation runs cleanly. The tools' scope screenshots were blank at the time (see Limitations), so the DAC
-was checked with the template's voltmeter and a slowed copy of the program: it follows the sine
-between 0 and 12 V (`docs/evidence/lab7_dac_slow.png`); the 100 Hz rate comes from the cycle count.
+simulation runs cleanly. The DAC was checked with the template's voltmeter and a slowed copy of the program:
+it follows the sine between 0 and 12 V (`docs/evidence/lab7_dac_slow.png`); the 100 Hz rate comes from the
+cycle count. That was before the scope could be used (see Limitations); today the scope shows it directly.
 
 `scripts/lab8_example.py` does lab8 (8259 + ADC0804 + 8251) starting from the bare template: replaces the
 static POT with an interactive POT-HG, builds the 74154 decoder, wires 8259, 8251, ADC, terminal and two
@@ -85,9 +85,11 @@ netlist shows the intended nets; the file opens without a dialog).
 
 Verified on this machine (Proteus 8.6 SP2, build 23525) unless marked otherwise.
 
-- **Scope:** the Digital Oscilloscope works in Proteus on this install (checked by hand 2026-11-17), but the
-  tools' own test of it has not been repeated since the reinstall, so waveforms are still checked with
-  voltmeters or slowed programs (TODO.md, Open work).
+- **Scope:** the Digital Oscilloscope works through the tools (2026-11-17): a 1 kHz generator on channel A
+  of the 2025 lab7 solution draws its square wave and `screenshot(window="Oscilloscope")` captures it
+  (`docs/evidence/scope_1khz.png`). The scope's settings are part properties (`CHAACDC`, `CHAVAL`,
+  `HORIZVAL` ...) set with `schematic_set_property` while Proteus is closed; a saved design may have its
+  channels switched off. The trace only draws while the popup is on screen (background mode off).
 - **Bus wires** are not drawn between pins. Buses are joined by named terminals (`AD0` joins the `AD[0..7]`
   line) and wire labels, which is how the templates do it.
 - **Annotated parts** (U1, R3, ...) keep their properties in ROOT.CDB, which only Proteus may write: offline

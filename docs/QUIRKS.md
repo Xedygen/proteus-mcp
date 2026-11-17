@@ -24,11 +24,14 @@ and reported in the launch result's `warnings`; any other unknown dialog stops a
 - **POT (plain)** is static in simulation (always mid-scale). Use **POT-HG** (place it with
   `schematic_place_devices`), then hold its red buttons with `sim_click(dx_grid=-1.27, dy_grid=+-1.05,
   hold_seconds=...)`; roughly one step per 0.2 s.
-- **Digital Oscilloscope**: the tools' screenshots of it were blank (old install, before 2026-11-15), but the
-  scope draws normally when used by hand on the current install (owner, 2026-11-17); retest pending in
-  TODO.md. Until then, check analog outputs with the template's DC
-  voltmeters instead: they average a fast signal (lab7's 6 + 6 sin shows 5.99 V), so for evidence build a
-  slowed-down copy of the program (about 0.7 s per sample) and sample the meter with screenshot_part.
+- **Digital Oscilloscope** (`$IOSCILLOSCOPE`, unannotated, so `schematic_set_property` works on it; verified
+  2026-11-17): its front panel is stored as properties, and a saved design may have channels switched off
+  (2025 lab7 solution: A, C, D off), which gives an empty screen. Per channel X in A..D: `CHXACDC` coupling
+  0 AC, 1 DC, 2 GND (inferred), 3 OFF; `CHXVAL` volts per division (`2`, `5.`); `CHXPOS` offset in divisions;
+  `CHXINV`. `HORIZVAL` is the time per division with a unit suffix (`0.5m` = 0.5 ms/div); trigger:
+  `TRIGSRC` (0 = A), `TRIGLEVEL`, `TRIGAUTO`. The screen is 20 x 20 divisions, one grid line each (measured:
+  1 kHz at 0.5m spans 2 per period, 5 V at 2 V/div about 2.4). screenshot(window="Oscilloscope") captures
+  the trace. The DC voltmeters only show averages (lab7's 6 + 6 sin shows 5.99 V).
 - **8255 log:** the simulation log shows only the power-on control word (`CTRLW SET TO 9B`), not the one your
   program writes; read it in debug_window("8255 Internal Status") instead.
 - **Debug panels** (Registers, Memory Dump, Variables) open docked at the bottom of the Source Code tab;

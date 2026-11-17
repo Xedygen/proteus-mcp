@@ -659,7 +659,9 @@ def schematic_rename_label(project: str, old: str, new: str) -> dict:
 
 @mcp.tool()
 def schematic_set_property(project: str, ref: str, key: str, value: str) -> dict:
-    """Set a {KEY=VALUE} property of an UNANNOTATED part (e.g. RES#0010, BUTTON#0007).
+    """Set a {KEY=VALUE} property of an UNANNOTATED part (e.g. RES#0010, BUTTON#0007). Also sets the
+    Digital Oscilloscope's panel ($IOSCILLOSCOPE#nnnn): CHAACDC=1 (channel A DC; 3 = off), CHAVAL=2 (V/div),
+    HORIZVAL=0.5m (time/div); saved designs may have channels off.
 
     Annotated parts (U1, U2 ...) are refused: Proteus reads their properties from ROOT.CDB, which only Proteus
     may write (it hangs on a modified CDB). For those use proteus_launch, then proteus_edit_component with
